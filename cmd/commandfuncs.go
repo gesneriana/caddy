@@ -712,7 +712,6 @@ func cmdWebGui(fl Flags) (int, error) {
 	config, _, err := loadConfig("./Caddyfile", "caddyfile")
 	if err != nil {
 		fmt.Println(err.Error())
-		return caddy.ExitCodeFailedStartup, err
 	}
 
 	// run the initial config
