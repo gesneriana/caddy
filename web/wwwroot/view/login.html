@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>日志管理中心</title>
+    <script src="/wwwroot/lib/jquery/dist/jquery.js"></script>
+    <script src="/wwwroot/lib/popper.js-1.15.0/dist/umd/popper.js"></script>
+    <link rel="stylesheet" href="/wwwroot/lib/bootstrap-4.3.1/dist/css/bootstrap.css">
+    </link>
+    <script src="/wwwroot/lib/bootstrap-4.3.1/dist/js/bootstrap.js"></script>
+    <script src="/wwwroot/lib/form-4.2.2/dist/jquery.form.min.js"></script>
+</head>
+
+<body>
+    <div style="height: 300px;"></div>
+    <div class="row">
+        <div class="col-lg-4"></div>
+        <div class="col-lg-4">
+            <div>
+                <form id="loginform" action="/login" method="POST" class="form-horizontal" role="form">
+                    <div class="form-group text-center">
+                        <legend>欢迎登录</legend>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username" class="control-lable col-sm-2">用户名</label>
+                        <div class="col-sm-10">
+                            <input id="username" name="username" class="form-control" type="text">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="control-lable col-lg-2">密码</label>
+                        <div class="col-lg-10">
+                            <input name="password" class="form-control" type="password">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="col-sm-10 col-sm-offset-2">
+                            <button type="submit" class="btn btn-primary">登录</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+        <div class="col-lg-4"></div>
+    </div>
+
+    <script>
+        $("#loginform").ajaxForm({
+            dataType: "json",
+            success: function (data) {
+                if (data.id > 0) {
+                    // 跳转到新页面
+                    location.href="/home/index"
+                } else {
+                    // 应该使用sweetalert
+                    alert("登录失败")
+                }
+            }
+        })
+    </script>
+</body>
+
+</html>

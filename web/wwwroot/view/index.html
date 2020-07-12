@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Caddy Web API</title>
+    <link rel="stylesheet" href="/wwwroot/lib/bootstrap-4.3.1/dist/css/bootstrap.css" />
+    <link rel="stylesheet" href="/wwwroot/lib/bootstrap-table-1.15.4/dist/bootstrap-table.css" />
+    <link rel="stylesheet" href="/wwwroot/lib/font-awesome-4.7.0/css/font-awesome.min.css" />
+    <link href="/wwwroot/lib/jsoneditor/dist/jsoneditor.min.css" rel="stylesheet" type="text/css">
+
+    <script src="/wwwroot/lib/jquery/dist/jquery.js"></script>
+    <script src="/wwwroot/lib/popper.js-1.15.0/dist/umd/popper.js"></script>
+    <script src="/wwwroot/lib/bootstrap-4.3.1/dist/js/bootstrap.js"></script>
+    <script src="/wwwroot/lib/bootstrap-table-1.15.4/dist/bootstrap-table.js"></script>
+    <script src="/wwwroot/lib/bootstrap-table-1.15.4/dist/bootstrap-table-vue.js"></script>
+    <script src="/wwwroot/lib/bootstrap-table-1.15.4/dist/bootstrap-table-locale-all.js"></script>
+    <script src="/wwwroot/lib/form-4.2.2/dist/jquery.form.min.js"></script>
+    <script src="/wwwroot/lib/vue-2.6.10/dist/vue.js"></script>
+    <script src="/wwwroot/lib/vue-router-3.1.3/dist/vue-router.js"></script>
+    <script src="/wwwroot/lib/jquery-cookie/jquery.cookie.js"></script>
+    <script src="/wwwroot/lib/jsoneditor/dist/jsoneditor.min.js"></script>
+    <style>
+        #router-list div {
+            line-height: 36px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="row">
+        <div class="col-lg-2" style="color: white;">
+            <div id="menu"
+                style="min-height: 800px;position: fixed;left: 0px;top: 0px;background-color: rgb(48, 40, 57);color:white;">
+                <div class="text-center h3" style="line-height: 50px;" title="使用web界面来管理Caddy API">Caddy配置</div>
+                <div style="padding-left: 20px;">
+                    <div id="router-list">
+                        <div>
+                            <router-link to="/project">
+                                <i class="fa fa-plus-square-o"></i> 站点列表
+                            </router-link>
+                        </div>
+                        <div>
+                            <a href="javascript:;" v-on:click="showLogList($event)">
+                                <i class="fa fa-cog"></i> 上传web应用
+                            </a>
+                        </div>
+                        <div>
+                            <router-link to="/jsonconfig">
+                                <i class="fa fa-plus-square-o"></i> Caddy配置
+                            </router-link>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-10">
+            <div id="content">
+                <router-view></router-view>
+            </div>
+        </div>
+    </div>
+    <script src="/wwwroot/js/site.js"></script>
+    <script src="/wwwroot/js/routes/project.js"></script>
+    <script src="/wwwroot/js/routes/new_project.js"></script>
+    <script src="/wwwroot/js/routes/edit_project.js"></script>
+    <script src="/wwwroot/js/routes/loglist.js"></script>
+    <script src="/wwwroot/js/routes/log_detail.js"></script>
+    <script src="/wwwroot/js/routes/json_config.js"></script>
+    <script src="/wwwroot/js/router.js"></script>
+    <script>
+        // this.$router
+        const app = new Vue({
+            router,
+            mounted: function () {
+            },
+            methods: {
+                showLogList: function (event) {
+                    var path = "/loglist/" + $.cookie('CurrentProjectId');
+                    if (this.$route.path == path) {
+                        // console.log("无需跳转,已显示日志列表页面");
+                        return;
+                    }
+                    this.$router.push({
+                        name: 'loglist',
+                        params:
+                        {
+                            ProjectID: $.cookie('CurrentProjectId')
+                        }
+                    })
+                }
+            }
+        }).$mount('#app')
+    </script>
+</body>
+
+</html>
