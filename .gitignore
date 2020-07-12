@@ -21,3 +21,9 @@ vendor
 dist
 caddy-build
 caddy-dist
+/cmd/caddy/wwwroot
+/cmd/caddy/__debug_bin
+/cmd/caddy/caddy
+/cmd/caddy/caddy.exe
+/cmd/caddy/Caddyfile
+/cmd/caddy/wwwroot.zip

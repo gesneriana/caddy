@@ -272,6 +272,11 @@ directly instead of printing it.`,
 		}(),
 	})
 
+	RegisterCommand(Command{
+		Name:  "gui",
+		Func:  cmdWebGui,
+		Short: "Start the program and listen on port 2020",
+	})
 }
 
 // RegisterCommand registers the command cmd.

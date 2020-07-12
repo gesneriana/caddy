@@ -36,6 +36,7 @@ import (
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/caddyserver/caddy/v2/web"
 	"go.uber.org/zap"
 )
 
@@ -690,4 +691,38 @@ func apiRequest(adminAddr, method, uri string, body io.Reader) error {
 	}
 
 	return nil
+}
+
+func cmdWebGui(fl Flags) (int, error) {
+	_, err := os.Stat("./Caddyfile")
+	if err != nil {
+		if !os.IsNotExist(err) {
+			fmt.Println("./Caddyfile folder does not exist: " + err.Error())
+			return caddy.ExitCodeFailedStartup, err
+		}
+
+		f, err := os.Create("./Caddyfile")
+		defer f.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+			return caddy.ExitCodeFailedStartup, err
+		}
+	}
+
+	config, _, err := loadConfig("./Caddyfile", "caddyfile")
+	if err != nil {
+		fmt.Println(err.Error())
+		return caddy.ExitCodeFailedStartup, err
+	}
+
+	// run the initial config
+	err = caddy.Load(config, true)
+	if err != nil {
+		return caddy.ExitCodeFailedStartup, fmt.Errorf("loading initial config: %v", err)
+	}
+
+	go watchConfigFile("./Caddyfile", "caddyfile")
+	web.WebGuiStart()
+
+	return caddy.ExitCodeSuccess, nil
 }
