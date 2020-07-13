@@ -41,7 +41,7 @@ type CaddyJSONConfigModel struct {
 			HTTPSPort   int `json:"https_port"`
 			GracePeriod int `json:"grace_period"`
 			Servers     struct {
-				CaddyWebGui struct {
+				Srv0 struct {
 					Listen           []string `json:"listen"`
 					ListenerWrappers []struct {
 					} `json:"listener_wrappers"`
@@ -51,12 +51,20 @@ type CaddyJSONConfigModel struct {
 					IdleTimeout       int `json:"idle_timeout"`
 					MaxHeaderBytes    int `json:"max_header_bytes"`
 					Routes            []struct {
-						Group string `json:"group"`
-						Match []struct {
-							Host string `json:"host"`
-						} `json:"match"`
 						Handle []struct {
+							Handler string `json:"handler"`
+							Routes  []struct {
+								Handle []struct {
+									Handler   string `json:"handler"`
+									Upstreams []struct {
+										Dial string `json:"dial"`
+									} `json:"upstreams"`
+								} `json:"handle"`
+							} `json:"routes"`
 						} `json:"handle"`
+						Match []struct {
+							Host []string `json:"host"`
+						} `json:"match"`
 						Terminal bool `json:"terminal"`
 					} `json:"routes"`
 					Errors struct {
@@ -110,7 +118,7 @@ type CaddyJSONConfigModel struct {
 					} `json:"logs"`
 					ExperimentalHTTP3 bool `json:"experimental_http3"`
 					AllowH2C          bool `json:"allow_h2c"`
-				} `json:"caddy_web_gui"`
+				} `json:"srv0"`
 			} `json:"servers"`
 		} `json:"http"`
 	} `json:"apps"`

@@ -719,7 +719,7 @@ func cmdWebGui(fl Flags) (int, error) {
 	if err != nil {
 		return caddy.ExitCodeFailedStartup, fmt.Errorf("loading initial config: %v", err)
 	}
-
+	// 自动热重载配置文件, 不需要再次load
 	go watchConfigFile("./Caddyfile", "caddyfile")
 	web.WebGuiStart()
 

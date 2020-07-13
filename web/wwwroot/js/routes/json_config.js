@@ -95,7 +95,7 @@ let jsonConfigTemplate = Vue.extend({
             console.log(updatedJson);
             $.ajax({
                 type: "post",
-                url: "/caddy/json_config",
+                url: "/json_config",
                 contentType: 'application/json',  //指定格式为json格式
                 datatype: 'json',
                 data: JSON.stringify(updatedJson),
@@ -119,7 +119,7 @@ let jsonConfigTemplate = Vue.extend({
             console.log(config);
             $.ajax({
                 type: "post",
-                url: "/caddy/caddy_config",
+                url: "/caddy_config",
                 datatype: 'json',
                 data: "Caddy=" + config,
                 success: function (resp) {
@@ -141,7 +141,7 @@ let jsonConfigTemplate = Vue.extend({
 
         $.ajax({
             type: "get",
-            url: "/caddy/json_config",
+            url: "/json_config",
             datatype: 'json',
             success: function (resp) {
                 // console.log(resp);
@@ -154,7 +154,7 @@ let jsonConfigTemplate = Vue.extend({
 
         $.ajax({
             type: "get",
-            url: "/caddy/caddy_config",
+            url: "/caddy_config",
             datatype: 'json',
             success: function (resp) {
                 if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data != "null\n") {

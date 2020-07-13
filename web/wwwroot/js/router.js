@@ -1,6 +1,6 @@
 const routes = [
-    { path: '/', component: projectTemplate },
-    { path: '/project', component: projectTemplate },
+    { path: '/', component: sitelistTemplate },
+    { path: '/sitelist', component: sitelistTemplate },
     { path: '/newproject', component: newProjectTemplate },
     { path: '/editproject', name: 'editproject', component: editProjectTemplate },
     { path: '/loglist/:ProjectID', name: 'loglist', component: loglistTemplate },
