@@ -10,7 +10,7 @@ type CaddyJSONConfigModel struct {
 		Config        struct {
 			Persist bool `json:"persist"`
 		} `json:"config"`
-	} `json:"admin"`
+	} `json:"-"`
 	Logging struct {
 		Sink struct {
 			Writer struct {
@@ -32,9 +32,9 @@ type CaddyJSONConfigModel struct {
 				Exclude []string `json:"exclude"`
 			} `json:"log_detail"`
 		} `json:"logs"`
-	} `json:"logging"`
+	} `json:"-"`
 	Storage struct {
-	} `json:"storage"`
+	} `json:"-"`
 	Apps struct {
 		HTTP struct {
 			HTTPPort    int `json:"http_port"`

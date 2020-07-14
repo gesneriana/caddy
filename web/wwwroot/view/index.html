@@ -42,12 +42,22 @@
                         </div>
                         <div>
                             <a href="javascript:;" v-on:click="showLogList($event)">
-                                <i class="fa fa-cog"></i> 上传web应用
+                                <i class="fa fa-plus-square-o"></i> 上传web应用
                             </a>
                         </div>
                         <div>
                             <router-link to="/jsonconfig">
-                                <i class="fa fa-plus-square-o"></i> Caddy配置
+                                <i class="fa fa-cog"></i> Caddy配置
+                            </router-link>
+                        </div>
+                        <div>
+                            <router-link to="/changepwd">
+                                <i class="fa fa-cog"></i> 设置密码
+                            </router-link>
+                        </div>
+                        <div>
+                            <router-link to="/addcaddyserver">
+                                <i class="fa fa-cog"></i> 添加下游caddy代理服务器
                             </router-link>
                         </div>
                     </div>
@@ -63,7 +73,7 @@
     <script src="/wwwroot/js/site.js"></script>
     <script src="/wwwroot/js/routes/caddy_sitelist.js"></script>
     <script src="/wwwroot/js/routes/new_project.js"></script>
-    <script src="/wwwroot/js/routes/edit_project.js"></script>
+    <script src="/wwwroot/js/routes/edit_sitelist.js"></script>
     <script src="/wwwroot/js/routes/loglist.js"></script>
     <script src="/wwwroot/js/routes/log_detail.js"></script>
     <script src="/wwwroot/js/routes/json_config.js"></script>

@@ -155,26 +155,51 @@ func RegisterIndexController(app *iris.Application) {
 			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: resp.StatusCode, Data: string(body)})
 		})
 
-		// 获取Json格式的caddy配置
+		// 将Json格式转换caddyfile并写入文件
 		app.Post("/json_config", func(ctx iris.Context) {
 			var config = model.CaddyJSONConfigModel{}
 			var err = ctx.ReadJSON(&config)
 			if err != nil {
-				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
+				ctx.JSON(model.ResponseData{State: false, Message: "设置Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
 				return
 			}
 
 			var bts, _ = json.Marshal(config)
 			fmt.Println(string(bts))
+
+			/*
+				caddyConfig, err := caddyfile.FromJSON(bts)
+
+				if err != nil {
+					ctx.JSON(model.ResponseData{State: false, Message: "Json转换Caddy配置失败", Error: err.Error(), HTTPCode: 500})
+					return
+				}
+			*/
+
+			// 本次修改有效, 下次重启caddy后json配置会丢失, 再次读取caddy file
 			resp, err := http.Post("http://127.0.0.1:2019/load", "application/json", bytes.NewReader(bts))
-			if err != nil {
-				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
+			body, _ := ioutil.ReadAll(resp.Body)
+			if resp.StatusCode != 200 || err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "设置Caddy配置失败", Error: err.Error(), Data: body, HTTPCode: 500})
 				return
 			}
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
 
-			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: resp.StatusCode, Data: string(body)})
+			// Caddyfile配置文件和json格式配置文件之间并不兼容, 暂不实现转换接口
+			/*
+				f, err := os.OpenFile("./Caddyfile", os.O_RDWR|os.O_TRUNC, 0600)
+				defer f.Close()
+				if err != nil {
+					ctx.JSON(model.ResponseData{State: false, Message: "设置Caddy配置失败", Error: err.Error(), HTTPCode: 500})
+					return
+				}
+
+				_, err = f.Write(caddyConfig)
+				if err != nil {
+					ctx.JSON(model.ResponseData{State: false, Message: "设置Caddy配置失败", Error: err.Error(), HTTPCode: 500})
+					return
+				}
+			*/
+			ctx.JSON(model.ResponseData{State: true, Message: "设置Caddy Json配置成功", HTTPCode: resp.StatusCode, Data: string(body)})
 		})
 
 		// 获取Json格式的caddy配置
@@ -194,8 +219,8 @@ func RegisterIndexController(app *iris.Application) {
 				return
 			}
 
-			var routes = caddyConfig.Apps.HTTP.Servers.Srv0.Routes
-			data, err := json.Marshal(routes)
+			// var routes = caddyConfig.Apps.HTTP.Servers.Srv0.Routes
+			data, err := json.Marshal(caddyConfig)
 			if err != nil {
 				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
 				return
@@ -203,6 +228,34 @@ func RegisterIndexController(app *iris.Application) {
 
 			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: 200, Data: string(data)})
 		})
+
+		// 获取Json格式的caddy配置
+		app.Post("/site_list", func(ctx iris.Context) {
+			resp, err := http.Get("http://127.0.0.1:2019/config")
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+
+			var caddyConfig = &model.CaddyJSONConfigModel{}
+			err = json.Unmarshal(body, caddyConfig)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			// var routes = caddyConfig.Apps.HTTP.Servers.Srv0.Routes
+			data, err := json.Marshal(caddyConfig)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: 200, Data: string(data)})
+		})
+
 	})
 
 }

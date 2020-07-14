@@ -1,10 +1,12 @@
 let sitelistTemplate = Vue.extend({
     template: `<div>
     <div class='row' style='line-height:60px;'>
-        <div class='col-lg-2 text-left h4' style='line-height:60px;'>网站</div>
-        <div class='col-lg-10 text-right' style='padding-right:2em;'><button class='btn btn-primary' @click='NewProject' >New</button></div>
+        <div class='col-lg-1 text-left h4' style='line-height:60px;'>网站</div>
+        <div class='col-lg-9 text-left h6' style='line-height:60px;'>JSON API 接口只在服务重启之前有效,重启后读取caddyfile配置,caddyfile是永久配置,json api是临时配置</div>
+        <div class='col-lg-1 text-right'><button class='btn btn-primary' @click='addSiteConfig' >添加站点</button></div>
     </div>
-    <div>
+    <div class="row">
+        <div class='col-lg-11'>
         <table class="table table-bordered table-striped" id="sitelist-table">
             <tr>
                 <th style="" data-field="handle"><div class="th-inner ">处理程序(handle)<a href="https://caddyserver.com/docs/json/apps/http/servers/routes/handle/" target="_blank">帮助</a></div><div class="fht-cell"></div></th>
@@ -45,50 +47,42 @@ let sitelistTemplate = Vue.extend({
                     <template v-for="(m, index) in item.match">
                         <template v-for="(mtype, name) in m">
                             <template v-for="(mvalue, mvalue_index) in mtype">
-                                <span>{{mvalue}}</span>
+                                <span>{{mvalue}}</span>&nbsp;
                             </template>
                         </template>
                     </template>
                 </td>
-                <td><button class='btn btn-primary' v-bind:title="index">编辑</button></td>
+                <td class="text-center">
+                    <template v-for="(m, index) in item.match">
+                        <template v-for="(mtype, name) in m">
+                            <button v-if="name==='host'" class='btn btn-primary' v-bind:title="index" @click="editCaddySiteConfig(index)">编辑</button>
+                        </template>
+                    </template>
+                </td>
             </tr>
         </table>
+        </div>
     </div>
     </div>`,
     data: function () {
         return {
+            caddyConfig: {},
             caddyRoutes: []
         }
     },
     methods: {
-        NewProject: function () {
+        addSiteConfig: function () {
             this.$router.push({ path: '/newproject' })
         },
-        editProject: function (projectId, projectName, projectPlatform) {
-            // var tds = $($("#project-table tbody tr").get(index)).children();
-            // console.log(tds.innerText)
+        editCaddySiteConfig: function (index) {
+            // console.log(this.caddyRoutes[index]);
             // 打开编辑页面
-            window.projectThis.$router.push({
-                name: 'editproject',
-                params:
+            this.$router.push({
+                name: 'editCaddySiteListConfig',
+                query:
                 {
-                    ProjectID: projectId,
-                    ProjectName: projectName,
-                    ProjectPlatform: projectPlatform
-                }
-            })
-        },
-        showProject: function (projectId, projectName) {
-            // var tds = $($("#project-table tbody tr").get(index)).children();
-            // console.log(tds.get(0).innerText)
-            // 打开详情页面
-            $.cookie('CurrentProjectId', projectId, { expires: 365 });
-            $.cookie('CurrentProjectName', projectName, { expires: 365 });
-            window.projectThis.$router.push({
-                name: 'loglist',
-                params:
-                {
-                    ProjectID: projectId
+                    index: index,
+                    caddyConfig: JSON.stringify(this.caddyConfig)
                 }
             })
         }
@@ -101,12 +95,11 @@ let sitelistTemplate = Vue.extend({
             datatype: 'json',
             success: function (resp) {
                 if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data.length > 0) {
-                    _this.caddyRoutes = JSON.parse(resp.data);
-                    console.log(_this.caddyRoutes);
+                    _this.caddyConfig = JSON.parse(resp.data);
+                    _this.caddyRoutes = _this.caddyConfig.apps.http.servers.srv0.routes;
+                    // console.log(_this.caddyRoutes);
                 }
             }
         });
-        window.editProject = this.$options.methods.editProject;
-        window.showProject = this.$options.methods.showProject;
     }
 })
