@@ -32,7 +32,13 @@ let jsonConfigTemplate = Vue.extend({
                             <textarea id="txtCaddy" v-model="caddyConfig" style="width: 100%; min-height: 800px"></textarea>
                         </div>
                     </div>
-                    
+                    <div class="row">
+                        <div class='col-lg-11'>
+                            <p>为什么采用caddyfile进行配置, 而不是全部使用json api, 请参考<a href="https://dengxiaolong.com/caddy/v2/zh/getting-started.html" target="_blank">对比说明</a></p>
+                            <p>caddyfile配置永久生效,JSON API只在caddy服务器运行时生效,重启后只会读取caddyfile的配置文件</p>
+                            <p>caddyfile已经能满足基本的功能,并且使用方便, 虽然JSON API包含所有的功能和模块,但是过于复杂</p>
+                        </div>
+                    </div>
                     <div class='row' style='line-height:60px;'>
                         <div class='col-lg-10'></div>
                         <div class='col-lg-1 text-right'>
@@ -159,7 +165,6 @@ let jsonConfigTemplate = Vue.extend({
             success: function (resp) {
                 if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data != "null\n") {
                     _this.caddyConfig = resp.data;
-                    console.log(resp.data);
                 }
             }
         });

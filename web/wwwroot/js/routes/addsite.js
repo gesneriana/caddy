@@ -1,7 +1,7 @@
-let editCaddySiteListConfigTemplate = Vue.extend({
+let addsiteTemplate = Vue.extend({
     template: `<div>
     <div class='row' style='line-height:60px;'>
-        <div class='col-lg-2 text-left h4' style='line-height:60px;'>编辑条目</div>
+        <div class='col-lg-2 text-left h4' style='line-height:60px;'>添加条目</div>
         <div class='col-lg-10 text-right' style='padding-right:2em;'></div>
     </div>
     <div>
@@ -46,7 +46,7 @@ let editCaddySiteListConfigTemplate = Vue.extend({
                 this.editRoute.match[0].host = hosts;
 
                 this.editRoute.handle[0].routes[0].handle[0].upstreams[0].dial = this.dial;
-                this.caddyRoutes[this.index] = this.editRoute;
+                this.caddyRoutes.push(this.editRoute);
                 this.caddyConfig.apps.http.servers.srv0.routes = this.caddyRoutes;
 
                 var _this = this;
@@ -73,15 +73,9 @@ let editCaddySiteListConfigTemplate = Vue.extend({
     },
     mounted: function () {
         var _this = this;
-        this.index = this.$route.query.index;
         this.caddyConfig = JSON.parse(this.$route.query.caddyConfig);
         this.caddyRoutes = this.caddyConfig.apps.http.servers.srv0.routes;
-        this.editRoute = this.caddyRoutes[this.index];
-        this.dial = this.editRoute.handle[0].routes[0].handle[0].upstreams[0].dial;
-        for (var i = 0; i < this.editRoute.match[0].host.length; i++) {
-            this.host_list += this.editRoute.match[0].host[i] + ","
-        }
-        this.host_list = this.host_list.substring(0, this.host_list.length - 1);
+        this.editRoute = JSON.parse(JSON.stringify(this.caddyRoutes[this.index]));
         // console.log(this.$route.query);
     }
 })

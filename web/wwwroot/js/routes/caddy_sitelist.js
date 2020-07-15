@@ -55,7 +55,8 @@ let sitelistTemplate = Vue.extend({
                 <td class="text-center">
                     <template v-for="(m, index) in item.match">
                         <template v-for="(mtype, name) in m">
-                            <button v-if="name==='host'" class='btn btn-primary' v-bind:title="index" @click="editCaddySiteConfig(index)">编辑</button>
+                            <button v-if="name==='host'" class='btn btn-primary' @click="editCaddySiteConfig(index)">编辑</button>
+                            <button v-if="name==='host'" class='btn btn-primary' @click="deleteCaddySiteConfig(index)">删除</button>
                         </template>
                     </template>
                 </td>
@@ -72,7 +73,12 @@ let sitelistTemplate = Vue.extend({
     },
     methods: {
         addSiteConfig: function () {
-            this.$router.push({ path: '/newproject' })
+            this.$router.push({
+                path: '/addsite',
+                query: {
+                    caddyConfig: JSON.stringify(this.caddyConfig)
+                }
+            })
         },
         editCaddySiteConfig: function (index) {
             // console.log(this.caddyRoutes[index]);
@@ -84,8 +90,14 @@ let sitelistTemplate = Vue.extend({
                     index: index,
                     caddyConfig: JSON.stringify(this.caddyConfig)
                 }
-            })
-        }
+            });
+        },
+        deleteCaddySiteConfig: function (index) {
+            // console.log(this.caddyRoutes[index]);
+            this.caddyRoutes.splice(index, 1);
+            // 打开编辑页面
+            console.log(this.caddyConfig);
+        },
     },
     mounted: function () {
         var _this = this;

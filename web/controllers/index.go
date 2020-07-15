@@ -155,7 +155,7 @@ func RegisterIndexController(app *iris.Application) {
 			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: resp.StatusCode, Data: string(body)})
 		})
 
-		// 将Json格式转换caddyfile并写入文件
+		// 通过Caddy JSON API管理caddy web服务器, 只在运行期间生效, 重启后失效, 暂不考虑做JSON API的持久化
 		app.Post("/json_config", func(ctx iris.Context) {
 			var config = model.CaddyJSONConfigModel{}
 			var err = ctx.ReadJSON(&config)
@@ -229,7 +229,7 @@ func RegisterIndexController(app *iris.Application) {
 			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: 200, Data: string(data)})
 		})
 
-		// 获取Json格式的caddy配置
+		// 通过caddy的JSON API获取caddy服务反向代理的域名列表
 		app.Post("/site_list", func(ctx iris.Context) {
 			resp, err := http.Get("http://127.0.0.1:2019/config")
 			if err != nil {
