@@ -17,19 +17,19 @@ let sitelistTemplate = Vue.extend({
             </tr>
             <tr v-for="(item, index) in caddyRoutes">
                 <td>
-                    <span v-for="(h1, index) in item.handle" v-bind:title="h1.handler">
-                        <template v-for="(h2, index) in h1.routes">
-                            <template v-for="(h3, index) in h2.handle">
+                    <span v-for="h1 in item.handle" v-bind:title="h1.handler">
+                        <template v-for="h2 in h1.routes">
+                            <template v-for="h3 in h2.handle">
                                 <span>{{h3.handler}}</span>
                             </template>
                         </template>
                     </span>
                 </td>
                 <td>
-                    <template v-for="(u1, index) in item.handle">
-                        <template v-for="(h2, index) in u1.routes">
-                            <template v-for="(h3, index) in h2.handle">
-                                <template v-for="(h4, index) in h3.upstreams">
+                    <template v-for="u1 in item.handle">
+                        <template v-for="h2 in u1.routes">
+                            <template v-for="h3 in h2.handle">
+                                <template v-for="h4 in h3.upstreams">
                                     <span>{{h4.dial}}</span>
                                 </template>
                             </template>
@@ -37,24 +37,24 @@ let sitelistTemplate = Vue.extend({
                     </template>
                 </td>
                 <td>
-                    <template v-for="(m, index) in item.match">
-                        <template v-for="(mtype, name) in m">
+                    <template v-for="m1 in item.match">
+                        <template v-for="(mtype, name) in m1">
                             <span>{{name}}</span>
                         </template>
                     </template>
                 </td>
                 <td>
-                    <template v-for="(m, index) in item.match">
-                        <template v-for="(mtype, name) in m">
-                            <template v-for="(mvalue, mvalue_index) in mtype">
+                    <template v-for="m2 in item.match">
+                        <template v-for="(mtype, name) in m2">
+                            <template v-for="mvalue in mtype">
                                 <span>{{mvalue}}</span>&nbsp;
                             </template>
                         </template>
                     </template>
                 </td>
                 <td class="text-center">
-                    <template v-for="(m, index) in item.match">
-                        <template v-for="(mtype, name) in m">
+                    <template v-for="m3 in item.match">
+                        <template v-for="(mtype, name) in m3">
                             <button v-if="name==='host'" class='btn btn-primary' @click="editCaddySiteConfig(index)">编辑</button>
                             <button v-if="name==='host'" class='btn btn-primary' @click="deleteCaddySiteConfig(index)">删除</button>
                         </template>
@@ -96,7 +96,7 @@ let sitelistTemplate = Vue.extend({
             // console.log(this.caddyRoutes[index]);
             this.caddyRoutes.splice(index, 1);
             var _this = this;
-            
+
             $.ajax({
                 type: "post",
                 url: "/json_config",
