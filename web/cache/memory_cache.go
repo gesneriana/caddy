@@ -58,3 +58,15 @@ func SetCacheData(key string, val interface{}) (err error) {
 
 	return nil
 }
+
+// DelCacheData 删除内存缓存
+func DelCacheData(key string) (b bool) {
+	if len(key) <= 0 {
+		log.Println("key 参数不能为空")
+		return false
+	}
+
+	affect := MemoryCache.Del([]byte(key))
+
+	return affect
+}

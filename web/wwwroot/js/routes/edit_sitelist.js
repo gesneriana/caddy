@@ -52,7 +52,7 @@ let editCaddySiteListConfigTemplate = Vue.extend({
                 var _this = this;
                 $.ajax({
                     type: "post",
-                    url: "/json_config",
+                    url: "/caddy/json_config",
                     contentType: 'application/json',  //指定格式为json格式
                     datatype: 'json',
                     data: JSON.stringify(_this.caddyConfig),

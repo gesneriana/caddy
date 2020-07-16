@@ -27,3 +27,4 @@ caddy-dist
 /cmd/caddy/caddy.exe
 /cmd/caddy/Caddyfile
 /cmd/caddy/wwwroot.zip
+cmd/caddy/pwd.json

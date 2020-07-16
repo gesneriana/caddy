@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -51,16 +53,53 @@ func RegisterIndexController(app *iris.Application) {
 		var user model.User
 		var username = ctx.FormValue("username")
 		var pwd = ctx.FormValue("password")
+		pwdHash := sha256.Sum256([]byte(pwd))
+		pwdHashString := base64.StdEncoding.EncodeToString(pwdHash[:])
 
 		user.UserName = username
 		user.Password = pwd
 		user.ID = 1
 
-		jsondata, err := json.Marshal(user)
-		if err != nil {
-			log.Println(err)
+		userJSONBts, err := ioutil.ReadFile("./pwd.json")
+		// 成功读取配置文件才会校验密码, 否则使用默认的用户名和密码
+		if err == nil {
+			var userConfig = &model.CaddyUser{}
+			err = json.Unmarshal(userJSONBts, userConfig)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "用户登录失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			if userConfig.UserName == username && userConfig.PasswordHash == pwdHashString {
+				// 将sid写入Redis或者数据库临时缓存
+				var sid = uuid.NewV4().String()
+
+				var userSession = model.UserSession{
+					Sid:        sid,
+					UserID:     user.ID,
+					UserName:   user.UserName,
+					CreateTime: time.Now(),
+					ExpireTime: 60 * 60 * 24,
+				}
+
+				var key = "sid_" + userSession.Sid
+				cache.SetCacheData(key, userSession)
+
+				ctx.SetCookie(&http.Cookie{
+					Name:     "sid",
+					Value:    key,
+					Path:     "/",
+					HttpOnly: true,
+				})
+				ctx.JSON(model.ResponseData{State: true, Message: "用户登录成功", HTTPCode: 200})
+				return
+			}
+
+			ctx.JSON(model.ResponseData{State: false, Message: "用户登录失败", HTTPCode: 403})
+			return
 		}
-		if username == "admin" && pwd == "admin666" {
+
+		if username == "admin" && pwd == "admin" {
 			// 将sid写入Redis或者数据库临时缓存
 			var sid = uuid.NewV4().String()
 
@@ -81,9 +120,11 @@ func RegisterIndexController(app *iris.Application) {
 				Path:     "/",
 				HttpOnly: true,
 			})
+			ctx.JSON(model.ResponseData{State: true, Message: "用户登录成功", HTTPCode: 200})
+			return
 		}
 
-		ctx.WriteString(string(jsondata))
+		ctx.JSON(model.ResponseData{State: false, Message: "用户登录失败", HTTPCode: 403})
 	})
 
 	// 需要验证cookie的授权, 分组action
@@ -97,6 +138,71 @@ func RegisterIndexController(app *iris.Application) {
 				log.Println(err)
 			}
 		})
+
+		p.Post("/changepwd", func(ctx iris.Context) {
+			username := ctx.FormValue("username")
+			oldpwd := ctx.FormValue("oldpassword")
+			newpwd := ctx.FormValue("newpassword")
+			var sid = ctx.GetCookie("sid")
+
+			oldpwdHash := sha256.Sum256([]byte(oldpwd))
+			newpwdHash := sha256.Sum256([]byte(newpwd))
+			oldpwdHashString := base64.StdEncoding.EncodeToString(oldpwdHash[:])
+			newpwdHashString := base64.StdEncoding.EncodeToString(newpwdHash[:])
+
+			var user = &model.CaddyUser{}
+
+			_, err := os.Stat("./pwd.json")
+			if err != nil {
+				if !os.IsNotExist(err) {
+					ctx.JSON(model.ResponseData{State: false, Message: "更新用户设置失败", Error: err.Error(), HTTPCode: 500})
+					return
+				}
+
+				f, err := os.Create("./pwd.json")
+				defer f.Close()
+				if err != nil {
+					ctx.JSON(model.ResponseData{State: false, Message: "更新用户设置失败", Error: err.Error(), HTTPCode: 500})
+					return
+				}
+
+				// pwd.json不存在, 不做校验, 直接写入配置文件
+				user.UserName = username
+				user.PasswordHash = newpwdHashString
+				bts, _ := json.Marshal(user)
+				f.Write(bts)
+
+				cache.DelCacheData(sid)
+				ctx.JSON(model.ResponseData{State: true, Message: "更新用户设置成功", HTTPCode: 200, Data: string(bts)})
+				return
+			}
+
+			btsPwdFile, err := ioutil.ReadFile("./pwd.json")
+			err = json.Unmarshal(btsPwdFile, user)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "更新用户设置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			// 只校验密码, 不校验用户名, 因为当前用户已经是登录状态了
+			if user.PasswordHash != oldpwdHashString {
+				ctx.JSON(model.ResponseData{State: false, Message: "更新用户设置失败", Data: "旧密码不正确", HTTPCode: 400})
+				return
+			}
+
+			user.UserName = username
+			user.PasswordHash = newpwdHashString
+			btsUser, _ := json.Marshal(user)
+			err = ioutil.WriteFile("./pwd.json", btsUser, os.ModePerm)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "更新用户设置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			cache.DelCacheData(sid)
+			ctx.JSON(model.ResponseData{State: true, Message: "更新用户设置成功", HTTPCode: 200, Data: string(btsUser)})
+			return
+		})
 	})
 
 	// 需要验证cookie的授权, 分组action
@@ -104,7 +210,7 @@ func RegisterIndexController(app *iris.Application) {
 		p.Use(filters.AuthHandle)
 
 		// 读取Caddyfile配置
-		app.Get("/caddy_config", func(ctx iris.Context) {
+		p.Get("/caddy_config", func(ctx iris.Context) {
 			b, err := ioutil.ReadFile("./Caddyfile")
 
 			if err != nil {
@@ -117,7 +223,7 @@ func RegisterIndexController(app *iris.Application) {
 		})
 
 		// 保存Caddyfile配置
-		app.Post("/caddy_config", func(ctx iris.Context) {
+		p.Post("/caddy_config", func(ctx iris.Context) {
 			var config = request.CaddyFileRequest{}
 			var err = ctx.ReadForm(&config)
 			if err != nil {
@@ -143,7 +249,7 @@ func RegisterIndexController(app *iris.Application) {
 		})
 
 		// 获取Json格式的caddy配置
-		app.Get("/json_config", func(ctx iris.Context) {
+		p.Get("/json_config", func(ctx iris.Context) {
 			resp, err := http.Get("http://127.0.0.1:2019/config")
 			if err != nil {
 				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
@@ -156,7 +262,7 @@ func RegisterIndexController(app *iris.Application) {
 		})
 
 		// 通过Caddy JSON API管理caddy web服务器, 只在运行期间生效, 重启后失效, 暂不考虑做JSON API的持久化
-		app.Post("/json_config", func(ctx iris.Context) {
+		p.Post("/json_config", func(ctx iris.Context) {
 			var config = model.CaddyJSONConfigModel{}
 			var err = ctx.ReadJSON(&config)
 			if err != nil {
@@ -203,34 +309,7 @@ func RegisterIndexController(app *iris.Application) {
 		})
 
 		// 获取Json格式的caddy配置
-		app.Get("/site_list", func(ctx iris.Context) {
-			resp, err := http.Get("http://127.0.0.1:2019/config")
-			if err != nil {
-				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
-				return
-			}
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-
-			var caddyConfig = &model.CaddyJSONConfigModel{}
-			err = json.Unmarshal(body, caddyConfig)
-			if err != nil {
-				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
-				return
-			}
-
-			// var routes = caddyConfig.Apps.HTTP.Servers.Srv0.Routes
-			data, err := json.Marshal(caddyConfig)
-			if err != nil {
-				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})
-				return
-			}
-
-			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: 200, Data: string(data)})
-		})
-
-		// 通过caddy的JSON API获取caddy服务反向代理的域名列表
-		app.Post("/site_list", func(ctx iris.Context) {
+		p.Get("/site_list", func(ctx iris.Context) {
 			resp, err := http.Get("http://127.0.0.1:2019/config")
 			if err != nil {
 				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy Json配置失败", Error: err.Error(), HTTPCode: 500})

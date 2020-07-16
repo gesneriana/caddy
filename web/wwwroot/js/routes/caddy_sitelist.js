@@ -99,7 +99,7 @@ let sitelistTemplate = Vue.extend({
 
             $.ajax({
                 type: "post",
-                url: "/json_config",
+                url: "/caddy/json_config",
                 contentType: 'application/json',  //指定格式为json格式
                 datatype: 'json',
                 data: JSON.stringify(_this.caddyConfig),
@@ -118,7 +118,7 @@ let sitelistTemplate = Vue.extend({
         var _this = this;
         $.ajax({
             type: "get",
-            url: "/site_list",
+            url: "/caddy/site_list",
             datatype: 'json',
             success: function (resp) {
                 if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data.length > 0) {
