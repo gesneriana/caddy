@@ -95,7 +95,22 @@ let sitelistTemplate = Vue.extend({
         deleteCaddySiteConfig: function (index) {
             // console.log(this.caddyRoutes[index]);
             this.caddyRoutes.splice(index, 1);
-            // 打开编辑页面
+            var _this = this;
+            
+            $.ajax({
+                type: "post",
+                url: "/json_config",
+                contentType: 'application/json',  //指定格式为json格式
+                datatype: 'json',
+                data: JSON.stringify(_this.caddyConfig),
+                success: function (resp) {
+                    console.log(resp);
+                    if (resp.code == 200 && resp.data != null && resp.data != "null") {
+                        console.log(resp.data);
+                    }
+                }
+            });
+
             console.log(this.caddyConfig);
         },
     },
