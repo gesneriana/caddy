@@ -41,8 +41,13 @@
                             </router-link>
                         </div>
                         <div>
+                            <router-link to="/certlist">
+                                <i class="fa fa-plus-square-o"></i> 证书管理
+                            </router-link>
+                        </div>
+                        <div>
                             <a href="javascript:;" v-on:click="showLogList($event)">
-                                <i class="fa fa-plus-square-o"></i> 上传web应用
+                                <i class="fa fa-plus-square-o"></i> web应用
                             </a>
                         </div>
                         <div>
@@ -57,7 +62,7 @@
                         </div>
                         <div>
                             <router-link to="/addcaddyserver">
-                                <i class="fa fa-cog"></i> 下游caddy代理服务器
+                                <i class="fa fa-cog"></i> 远程托管
                             </router-link>
                         </div>
                     </div>
@@ -76,6 +81,7 @@
     <script src="/wwwroot/js/routes/edit_sitelist.js"></script>
     <script src="/wwwroot/js/routes/pwd_manage.js"></script>
     <script src="/wwwroot/js/routes/json_config.js"></script>
+    <script src="/wwwroot/js/routes/certlist.js"></script>
     <script src="/wwwroot/js/router.js"></script>
     <script>
         // this.$router

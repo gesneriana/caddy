@@ -5,6 +5,7 @@ const routes = [
     { path: '/editCaddySiteListConfig', name: 'editCaddySiteListConfig', component: editCaddySiteListConfigTemplate },
     { path: '/jsonconfig', name: 'jsonconfig', component: jsonConfigTemplate },
     { path: '/pwdmanage', name: 'pwdmanage', component: pwdmanageTemplate },
+    { path: '/certlist', name: 'certlist', component: certlistTemplate },
 ]
 
 const router = new VueRouter({

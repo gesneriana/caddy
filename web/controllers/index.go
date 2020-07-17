@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/caddyserver/caddy/v2/web/cache"
+	"github.com/caddyserver/caddy/v2/web/common"
 	"github.com/caddyserver/caddy/v2/web/filters"
 	"github.com/caddyserver/caddy/v2/web/model"
 	"github.com/caddyserver/caddy/v2/web/model/request"
@@ -22,8 +23,8 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-// RegisterIndexController 注册控制器
-func RegisterIndexController(app *iris.Application) {
+// RegisterIrisWebActionHandle 注册iris的路由web handle
+func RegisterIrisWebActionHandle(app *iris.Application) {
 	// 首页, 登录页
 	app.Get("/", func(ctx iris.Context) {
 		// 判断用户是否登录
@@ -349,6 +350,39 @@ func RegisterIndexController(app *iris.Application) {
 			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy Json配置成功", HTTPCode: 200, Data: string(data)})
 		})
 
+		p.Get("/certlist", func(ctx iris.Context) {
+			homeDir, err := common.Home()
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy 证书列表失败", Error: err.Error(), HTTPCode: 500})
+				return
+			} else if len(homeDir) == 0 {
+				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy 证书列表失败", Data: "homeDir长度为0", HTTPCode: 500})
+				return
+			}
+
+			var certData = model.CertData{CertList: make([]model.CertModel, 0)}
+			certRootPath := homeDir + "/.local/share/caddy/certificates"
+			acmeDirs, _ := ioutil.ReadDir(certRootPath)
+			for _, d1 := range acmeDirs {
+				domainDirs, _ := ioutil.ReadDir(certRootPath + "/" + d1.Name())
+				for _, domainDir := range domainDirs {
+					certDir := certRootPath + "/" + d1.Name() + "/" + domainDir.Name()
+					var certModel = model.CertModel{}
+					certModel.CertDir = certDir
+					certModel.Domain = domainDir.Name()
+					certModel.LastModifiedTime = domainDir.ModTime()
+					certData.CertList = append(certData.CertList, certModel)
+				}
+			}
+
+			certDataBytes, err := json.Marshal(certData)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "获取Caddy 证书列表失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			ctx.JSON(model.ResponseData{State: true, Message: "获取Caddy 证书列表成功", HTTPCode: 200, Data: string(certDataBytes)})
+		})
 	})
 
 }

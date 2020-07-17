@@ -25,7 +25,7 @@ func WebGuiStart() {
 	app.HandleDir("/view", "./wwwroot/view")
 	app.HandleDir("/wwwroot", "./wwwroot")
 
-	controllers.RegisterIndexController(app)
+	controllers.RegisterIrisWebActionHandle(app)
 
 	app.Run(iris.Addr(":2020"))
 }
