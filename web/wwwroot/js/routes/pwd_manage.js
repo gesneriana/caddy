@@ -67,7 +67,10 @@ let pwdmanageTemplate = Vue.extend({
             </div>
     
             <div id="menu2" role="tabpanel" class="tab-pane">
-                <textarea id="txtRaw" v-model="token" style="width: 90%; min-height: 800px"></textarea>
+                <div>
+                    <p>token可用于远程管理, 输入被管理的服务器的token和域名即可</p>
+                </div>
+                <div><textarea id="txtRaw" v-model="token" style="width: 90%; min-height: 800px" readonly ></textarea></div>
             </div>
         </div>
     
@@ -96,6 +99,19 @@ let pwdmanageTemplate = Vue.extend({
                     // 应该使用sweetalert
                     console.log(data);
                     alert("修改失败");
+                }
+            }
+        });
+
+        $.ajax({
+            type: "get",
+            url: "/home/token",
+            datatype: 'json',
+            success: function (resp) {
+                // console.log(resp);
+                if (resp.code == 200 && resp.state == true) {
+                    console.log(resp);
+                    _this.token = resp.data;
                 }
             }
         });

@@ -54,7 +54,9 @@ func RegisterIndexController(app *iris.Application) {
 		var username = ctx.FormValue("username")
 		var pwd = ctx.FormValue("password")
 		pwdHash := sha256.Sum256([]byte(pwd))
+		userHash := sha256.Sum256([]byte(username + pwd))
 		pwdHashString := base64.StdEncoding.EncodeToString(pwdHash[:])
+		userHashString := base64.StdEncoding.EncodeToString(userHash[:])
 
 		user.UserName = username
 		user.Password = pwd
@@ -78,6 +80,7 @@ func RegisterIndexController(app *iris.Application) {
 					Sid:        sid,
 					UserID:     user.ID,
 					UserName:   user.UserName,
+					UserHash:   userHashString,
 					CreateTime: time.Now(),
 					ExpireTime: 60 * 60 * 24,
 				}
@@ -107,6 +110,7 @@ func RegisterIndexController(app *iris.Application) {
 				Sid:        sid,
 				UserID:     user.ID,
 				UserName:   user.UserName,
+				UserHash:   userHashString,
 				CreateTime: time.Now(),
 				ExpireTime: 60 * 60 * 24,
 			}
@@ -202,6 +206,16 @@ func RegisterIndexController(app *iris.Application) {
 			cache.DelCacheData(sid)
 			ctx.JSON(model.ResponseData{State: true, Message: "更新用户设置成功", HTTPCode: 200, Data: string(btsUser)})
 			return
+		})
+
+		p.Get("/token", func(ctx iris.Context) {
+			u := ctx.Values().Get("user")
+			if user, ok := u.(model.UserSession); ok {
+				ctx.JSON(model.ResponseData{State: true, Message: "获取token成功", Data: user.UserHash, HTTPCode: 200})
+				return
+			}
+
+			ctx.JSON(model.ResponseData{State: false, Message: "获取token失败", HTTPCode: 500})
 		})
 	})
 

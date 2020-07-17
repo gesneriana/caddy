@@ -17,6 +17,8 @@ type UserSession struct {
 	UserID int `json:"userid"`
 	// 用户名
 	UserName string `json:"username"`
+	// 用户名和密码的hash
+	UserHash string `json:"userhash"`
 	// 创建时间
 	CreateTime time.Time `json:"createtime"`
 	// 有效时间, 默认是一天, 单位是秒
