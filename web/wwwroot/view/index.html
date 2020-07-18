@@ -91,18 +91,6 @@
             },
             methods: {
                 showLogList: function (event) {
-                    var path = "/loglist/" + $.cookie('CurrentProjectId');
-                    if (this.$route.path == path) {
-                        // console.log("无需跳转,已显示日志列表页面");
-                        return;
-                    }
-                    this.$router.push({
-                        name: 'loglist',
-                        params:
-                        {
-                            ProjectID: $.cookie('CurrentProjectId')
-                        }
-                    })
                 }
             }
         }).$mount('#app')

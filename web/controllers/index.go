@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/caddyserver/caddy/v2/web/cache"
@@ -217,6 +218,43 @@ func RegisterIrisWebActionHandle(app *iris.Application) {
 			}
 
 			ctx.JSON(model.ResponseData{State: false, Message: "获取token失败", HTTPCode: 500})
+		})
+
+		p.Get("/downloadCert", func(ctx iris.Context) {
+			crtPath := ctx.URLParam("crt")
+			certname := ctx.URLParam("certname")
+			if strings.Contains(crtPath, "/.local/share/caddy/certificates") == false {
+				return
+			}
+
+			if len(certname) == 0 {
+				certname = "cert"
+			}
+
+			log.Println("crtPath:" + crtPath)
+			err := ctx.SendFile(crtPath, certname+".crt")
+			if err != nil {
+				ctx.WriteString(err.Error())
+			}
+		})
+
+		p.Get("/downloadCertKey", func(ctx iris.Context) {
+			keyPath := ctx.URLParam("key")
+			certname := ctx.URLParam("certname")
+
+			if strings.Contains(keyPath, "/.local/share/caddy/certificates") == false {
+				return
+			}
+
+			if len(certname) == 0 {
+				certname = "cert"
+			}
+
+			log.Println("keyPath:" + keyPath)
+			err := ctx.SendFile(keyPath, certname+".key")
+			if err != nil {
+				ctx.WriteString(err.Error())
+			}
 		})
 	})
 
