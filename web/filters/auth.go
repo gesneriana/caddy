@@ -16,7 +16,15 @@ func AuthHandle(ctx iris.Context) {
 	var sid = ctx.GetCookie("sid")
 	if len(sid) <= 0 {
 		// 重定向到首页
+		if ctx.IsAjax() {
+			ctx.JSON(model.ResponseData{State: false, Message: "授权已过期或者无效,请登录", Data: "/", HTTPCode: 301})
+			ctx.EndRequest()
+			return
+		}
+
 		ctx.Redirect("/")
+		ctx.EndRequest()
+		return
 	}
 
 	var userSession = model.UserSession{}
@@ -27,8 +35,16 @@ func AuthHandle(ctx iris.Context) {
 		// fmt.Println("当前登录有效")
 		ctx.Values().Set("user", userSession)
 		ctx.NextOrNotFound()
-	} else {
-		log.Println("登录已过期")
-		ctx.Redirect("/")
+		return
 	}
+
+	log.Println("登录已过期")
+	if ctx.IsAjax() {
+		ctx.JSON(model.ResponseData{State: false, Message: "授权已过期或者无效,请登录", Data: "/", HTTPCode: 301})
+		ctx.EndRequest()
+		return
+	}
+
+	ctx.Redirect("/")
+	ctx.EndRequest()
 }

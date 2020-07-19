@@ -88,6 +88,41 @@
         const app = new Vue({
             router,
             mounted: function () {
+                $.ajaxSetup({
+                    complete: function (data) {
+                        if (data.status == 200) {
+                            console.log(data.responseJSON);
+                            if (data.responseJSON.code == 301) {
+                                location.href = data.responseJSON.data;
+                            }
+                        } else {
+                            console.log(data.response);
+                        }
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        $.messager.show({ title: '提示信息', msg: '<center style="color:red">网络异常，请稍后再试</center>', timeout: 2000, showType: 'slide' });
+                        switch (jqXHR.status) {
+                            case (500):
+                                alert("服务器系统内部错误");
+                                break;
+                            case (401):
+                                alert("未登录");
+                                break;
+                            case (403):
+                                alert("无权限执行此操作");
+                                break;
+                            case (408):
+                                alert("请求超时");
+                                break;
+                            case (301):
+                                console.log(jqXHR.response);
+                                break;
+                            default:
+                                console.log("未处理的错误:" + jqXHR.response);
+                        }
+                    }
+                });
+
             },
             methods: {
                 showLogList: function (event) {
