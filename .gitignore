@@ -28,3 +28,8 @@ caddy-dist
 /cmd/caddy/Caddyfile
 /cmd/caddy/wwwroot.zip
 cmd/caddy/pwd.json
+/cmd/caddy/filebrowser.zip
+cmd/caddy/filebrowser/CHANGELOG.md
+cmd/caddy/filebrowser/filebrowser.db
+cmd/caddy/filebrowser/LICENSE
+cmd/caddy/filebrowser/README.md

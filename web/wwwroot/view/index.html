@@ -93,7 +93,7 @@
                     complete: function (data) {
                         if (data.status == 200) {
                             console.log(data.responseJSON);
-                            if (data.responseJSON.code == 301) {
+                            if (data.responseText.length > 0 && data.responseJSON != undefined && data.responseJSON.code == 301) {
                                 location.href = data.responseJSON.data;
                             }
                         } else {
@@ -101,7 +101,6 @@
                         }
                     },
                     error: function (jqXHR, textStatus, errorThrown) {
-                        $.messager.show({ title: '提示信息', msg: '<center style="color:red">网络异常，请稍后再试</center>', timeout: 2000, showType: 'slide' });
                         switch (jqXHR.status) {
                             case (500):
                                 alert("服务器系统内部错误");

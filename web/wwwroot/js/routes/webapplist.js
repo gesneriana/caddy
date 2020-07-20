@@ -18,11 +18,22 @@ let webapplistTemplate = Vue.extend({
                 <td>
                     <template v-for="u1 in item.handle">
                         <template v-for="h2 in u1.routes">
-                            <template v-for="h3 in h2.handle">
-                                <template v-for="h4 in h3.upstreams">
-                                    <span>{{h4.dial}}</span>
-                                </template>
-                            </template>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <template v-for="h3 in h2.handle">
+                                        <template v-for="h4 in h3.upstreams">
+                                            <span>{{h4.dial}}</span>
+                                        </template>
+                                    </template>
+                                </div>
+                                <div class="col-lg-6">
+                                    <template v-for="h3 in h2.match">
+                                        <template v-for="h4 in h3.path">
+                                            <span>{{h4}}</span>
+                                        </template>
+                                    </template>
+                                </div>
+                            </div>
                         </template>
                     </template>
                 </td>
@@ -47,7 +58,7 @@ let webapplistTemplate = Vue.extend({
                         <template v-for="(mtype, name) in m3">
                             <button v-if="name==='host'" class='btn btn-primary' @click="uploadWebApp(index)">文件管理</button>
                             <button v-if="name==='host'" class='btn btn-primary' @click="editStartShellScripts(index)">启动脚本</button>
-                            <button v-if="name==='host'" class='btn btn-primary' ">停止脚本</button>
+                            <button v-if="name==='host'" class='btn btn-primary' >停止脚本</button>
                         </template>
                     </template>
                 </td>
@@ -72,14 +83,20 @@ let webapplistTemplate = Vue.extend({
             })
         },
         uploadWebApp: function (index) {
-            // console.log(this.caddyRoutes[index]);
-            // 打开编辑页面
-            this.$router.push({
-                name: 'editCaddySiteListConfig',
-                query:
-                {
-                    index: index,
-                    caddyConfig: JSON.stringify(this.caddyConfig)
+            var _this = this;
+            var route = _this.caddyRoutes[index];
+            var domain = route.match[0].host[0];
+            // 请求后端创建 www.example.com 目录, 然后打开新窗口显示此文件夹
+            $.ajax({
+                type: "post",
+                url: "/home/filebrowserpath",
+                data: "domain=" + domain,
+                datatype: 'json',
+                success: function (resp) {
+                    if (resp.code == 200 && resp.state == true) {
+                        window.open(resp.data, "_blank");
+                        // console.log(_this.caddyRoutes);
+                    }
                 }
             });
         },
@@ -87,7 +104,7 @@ let webapplistTemplate = Vue.extend({
             // console.log(this.caddyRoutes[index]);
             this.caddyRoutes.splice(index, 1);
             var _this = this;
-
+            // 还需要优化filebrowser模块的caddy路由自动化配置, 将端口为2020的域名添加 path路由匹配filebrowser模块
             console.log(this.caddyConfig);
         },
     },
@@ -102,6 +119,18 @@ let webapplistTemplate = Vue.extend({
                     _this.caddyConfig = JSON.parse(resp.data);
                     _this.caddyRoutes = _this.caddyConfig.apps.http.servers.srv0.routes;
                     // console.log(_this.caddyRoutes);
+                }
+            }
+        });
+
+        $.ajax({
+            type: "get",
+            url: "/home/filebrowsertoken",
+            datatype: 'json',
+            success: function (resp) {
+                if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data.length > 0) {
+                    // console.log(_this.caddyRoutes);
+                    localStorage.setItem("jwt", resp.data);
                 }
             }
         });

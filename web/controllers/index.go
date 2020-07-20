@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -255,6 +256,58 @@ func RegisterIrisWebActionHandle(app *iris.Application) {
 			if err != nil {
 				ctx.WriteString(err.Error())
 			}
+		})
+
+		p.Get("/filebrowsertoken", func(ctx iris.Context) {
+			var key = "jwt"
+			jwtBytes, err := cache.MemoryCache.Get([]byte(key))
+			if err == nil && len(jwtBytes) > 0 {
+				ctx.JSON(model.ResponseData{State: true, Message: "filebrowser服务登录成功", Data: string(jwtBytes), HTTPCode: 200})
+				return
+			}
+
+			var user = &request.FileBrowserLogin{}
+			user.UserName = "admin"
+			user.Password = "filebrowseradmin"
+			user.Recaptcha = ""
+
+			var bts, _ = json.Marshal(user)
+			fmt.Println(string(bts))
+			resp, err := http.Post("http://127.0.0.1:2021/filebrowser/api/login", "application/json", bytes.NewReader(bts))
+			body, _ := ioutil.ReadAll(resp.Body)
+			if resp.StatusCode != 200 || err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "设置Caddy配置失败", Error: err.Error(), Data: body, HTTPCode: 500})
+				return
+			}
+
+			cache.MemoryCache.Set([]byte(key), body, 60*60)
+			ctx.JSON(model.ResponseData{State: true, Message: "filebrowser服务登录成功", Data: body, HTTPCode: 200})
+			return
+		})
+
+		p.Post("/filebrowserpath", func(ctx iris.Context) {
+			var domain = ctx.FormValue("domain")
+			_, err := os.Stat("./filebrowser/webapp/" + domain)
+			if err != nil {
+				if os.IsNotExist(err) {
+					//创建目录
+					dir, _ := os.Executable()
+					exPath := filepath.Dir(dir)
+					if err := os.Mkdir(exPath+"/filebrowser/webapp/"+domain, os.ModePerm); err != nil {
+						ctx.JSON(model.ResponseData{State: false, Message: "创建web app目录失败", Error: err.Error(), HTTPCode: 500})
+						return
+					}
+
+					ctx.JSON(model.ResponseData{State: true, Message: "创建web app目录成功", Data: "/filebrowser/files/" + domain, HTTPCode: 200})
+					return
+				}
+
+				ctx.JSON(model.ResponseData{State: false, Message: "创建web app目录失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			ctx.JSON(model.ResponseData{State: true, Message: "web app目录已存在", Data: "/filebrowser/files/" + domain, HTTPCode: 200})
+			return
 		})
 	})
 

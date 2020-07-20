@@ -1,7 +1,12 @@
 package web
 
 import (
+	"fmt"
+	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 
 	"github.com/caddyserver/caddy/v2/web/common"
 	"github.com/caddyserver/caddy/v2/web/controllers"
@@ -9,11 +14,101 @@ import (
 	"github.com/kataras/iris/v12"
 )
 
+// 初始化filebrowser模块
+func initLinuxFileBrowser() {
+	_, err := os.Stat("./filebrowser")
+	if err != nil {
+		log.Printf("[Error] ./filebrowser dir not exist: %v\n", err)
+		return
+	}
+
+	_, err = os.Stat("./filebrowser/webapp")
+	if err != nil {
+		if os.IsNotExist(err) {
+			//创建目录
+			dir, _ := os.Executable()
+			exPath := filepath.Dir(dir)
+			if err := os.Mkdir(exPath+"/filebrowser/webapp", os.ModePerm); err != nil {
+				fmt.Println(err)
+				return
+			}
+		}
+		return
+	}
+
+	_, err = os.Stat("./filebrowser/filebrowser.db")
+	if err == nil {
+		log.Printf("./filebrowser/filebrowser.db already exists")
+	} else {
+		command := `./filebrowser.sh .`
+		cmd := exec.Command("/bin/bash", "-c", command)
+
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("Execute Shell:%s failed with error:%s", command, err.Error())
+			return
+		}
+		fmt.Printf("Execute Shell:%s finished with output:\n%s", command, string(output))
+	}
+
+	go func() {
+		command := `cd ./filebrowser/webapp && ../filebrowser -d ../filebrowser.db`
+		cmd := exec.Command("/bin/bash", "-c", command)
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("Execute Shell:%s failed with error:%s", command, err.Error())
+			return
+		}
+		fmt.Printf("Execute Shell:%s finished with output:\n%s", command, string(output))
+	}()
+
+}
+
+func initWindowsFileBrowser() {
+	_, err := os.Stat("./filebrowser")
+	if err != nil {
+		log.Printf("[Error] ./filebrowser dir not exist: %v\n", err)
+		return
+	}
+
+	_, err = os.Stat("./filebrowser/filebrowser.db")
+	if err == nil {
+		log.Printf("./filebrowser/filebrowser.db already exists")
+	} else {
+		cmd := exec.Command("filebrowser.bat")
+
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("Execute Shell: failed with error:\n%s", err.Error())
+			return
+		}
+		fmt.Printf("Execute Shell: finished with output:\n%s", string(output))
+	}
+
+	go func() {
+		command := `.\\filebrowser\\start.bat`
+		cmd := exec.Command(command)
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("Execute Shell:%s failed with error:%s", command, err.Error())
+			return
+		}
+		fmt.Printf("Execute Shell:%s finished with output:\n%s", command, string(output))
+	}()
+
+}
+
 // WebGuiStart 启动web界面
 func WebGuiStart() {
 	_, err := os.Stat("../../web/wwwroot")
 	if err == nil {
 		common.CopyDir("../../web/wwwroot", "./wwwroot")
+	}
+
+	if runtime.GOOS == "windows" {
+		initWindowsFileBrowser()
+	} else if runtime.GOOS == "linux" {
+		initLinuxFileBrowser()
 	}
 
 	app := iris.Default()
