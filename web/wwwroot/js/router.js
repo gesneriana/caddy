@@ -3,9 +3,10 @@ const routes = [
     { path: '/sitelist', component: sitelistTemplate },
     { path: '/addsite', component: addsiteTemplate },
     { path: '/editCaddySiteListConfig', name: 'editCaddySiteListConfig', component: editCaddySiteListConfigTemplate },
-    { path: '/jsonconfig', name: 'jsonconfig', component: jsonConfigTemplate },
+    { path: '/caddyConfig', name: 'caddyConfig', component: caddyConfigTemplate },
     { path: '/pwdmanage', name: 'pwdmanage', component: pwdmanageTemplate },
     { path: '/certlist', name: 'certlist', component: certlistTemplate },
+    { path: '/webapplist', name: 'webapplist', component: webapplistTemplate },
 ]
 
 const router = new VueRouter({

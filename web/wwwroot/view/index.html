@@ -46,12 +46,12 @@
                             </router-link>
                         </div>
                         <div>
-                            <a href="javascript:;" v-on:click="showLogList($event)">
-                                <i class="fa fa-plus-square-o"></i> web应用
-                            </a>
+                            <router-link to="/webapplist">
+                                <i class="fa fa-plus-square-o"></i> Web应用
+                            </router-link>
                         </div>
                         <div>
-                            <router-link to="/jsonconfig">
+                            <router-link to="/caddyConfig">
                                 <i class="fa fa-cog"></i> Caddy配置
                             </router-link>
                         </div>
@@ -76,12 +76,13 @@
         </div>
     </div>
     <script src="/wwwroot/js/site.js"></script>
-    <script src="/wwwroot/js/routes/caddy_sitelist.js"></script>
+    <script src="/wwwroot/js/routes/sitelist.js"></script>
     <script src="/wwwroot/js/routes/addsite.js"></script>
     <script src="/wwwroot/js/routes/edit_sitelist.js"></script>
     <script src="/wwwroot/js/routes/pwd_manage.js"></script>
-    <script src="/wwwroot/js/routes/json_config.js"></script>
+    <script src="/wwwroot/js/routes/caddy_config.js"></script>
     <script src="/wwwroot/js/routes/certlist.js"></script>
+    <script src="/wwwroot/js/routes/webapplist.js"></script>
     <script src="/wwwroot/js/router.js"></script>
     <script>
         // this.$router

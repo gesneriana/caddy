@@ -60,6 +60,9 @@ type CaddyJSONConfigModel struct {
 										Dial string `json:"dial"`
 									} `json:"upstreams"`
 								} `json:"handle"`
+								Match []struct {
+									Path []string `json:"path"`
+								} `json:"match"`
 							} `json:"routes"`
 						} `json:"handle"`
 						Match []struct {

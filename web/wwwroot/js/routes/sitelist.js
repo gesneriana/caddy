@@ -20,7 +20,7 @@ let sitelistTemplate = Vue.extend({
                     <span v-for="h1 in item.handle" v-bind:title="h1.handler">
                         <template v-for="h2 in h1.routes">
                             <template v-for="h3 in h2.handle">
-                                <span>{{h3.handler}}</span>
+                                <div>{{h3.handler}}</div>
                             </template>
                         </template>
                     </span>
@@ -28,11 +28,22 @@ let sitelistTemplate = Vue.extend({
                 <td>
                     <template v-for="u1 in item.handle">
                         <template v-for="h2 in u1.routes">
-                            <template v-for="h3 in h2.handle">
-                                <template v-for="h4 in h3.upstreams">
-                                    <span>{{h4.dial}}</span>
-                                </template>
-                            </template>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <template v-for="h3 in h2.handle">
+                                        <template v-for="h4 in h3.upstreams">
+                                            <span>{{h4.dial}}</span>
+                                        </template>
+                                    </template>
+                                </div>
+                                <div class="col-lg-6">
+                                    <template v-for="h3 in h2.match">
+                                        <template v-for="h4 in h3.path">
+                                            <span>{{h4}}</span>
+                                        </template>
+                                    </template>
+                                </div>
+                            </div>
                         </template>
                     </template>
                 </td>
@@ -53,12 +64,7 @@ let sitelistTemplate = Vue.extend({
                     </template>
                 </td>
                 <td class="text-center">
-                    <template v-for="m3 in item.match">
-                        <template v-for="(mtype, name) in m3">
-                            <button v-if="name==='host'" class='btn btn-primary' @click="editCaddySiteConfig(index)">编辑</button>
-                            <button v-if="name==='host'" class='btn btn-primary' @click="deleteCaddySiteConfig(index)">删除</button>
-                        </template>
-                    </template>
+                    <button class='btn btn-primary' @click="deleteCaddySiteConfig(index)">删除</button>
                 </td>
             </tr>
         </table>

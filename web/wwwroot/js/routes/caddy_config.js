@@ -1,4 +1,4 @@
-let jsonConfigTemplate = Vue.extend({
+let caddyConfigTemplate = Vue.extend({
     template:
     `<div>
         <div class='row' style='line-height:60px;'>
@@ -169,10 +169,17 @@ let jsonConfigTemplate = Vue.extend({
             }
         });
 
-        this.demo = `caddy.kizuna.top {
-            reverse_proxy 127.0.0.1:2020
+        this.demo = 
+        `caddy.kizuna.top {
+            reverse_proxy /* 127.0.0.1:2020
+            reverse_proxy /filebrowser 127.0.0.1:8088
+            reverse_proxy /filebrowser/* 127.0.0.1:8088
         }
         
+        jp.kizuna.top {
+            reverse_proxy 127.0.0.1:8088
+        }
+                
         # jp.kizuna.top {
         #    reverse_proxy 127.0.0.1:2020 127.0.0.1:2021 {
         #        lb_policy first
