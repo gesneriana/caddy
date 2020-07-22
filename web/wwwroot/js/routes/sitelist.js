@@ -12,7 +12,7 @@ let sitelistTemplate = Vue.extend({
                 <th style="" data-field="handle"><div class="th-inner ">处理程序(handle)<a href="https://caddyserver.com/docs/json/apps/http/servers/routes/handle/" target="_blank">帮助</a></div><div class="fht-cell"></div></th>
                 <th style="" data-field="upsteams"><div class="th-inner ">后端主机(upsteams)<a href="https://caddyserver.com/docs/json/apps/http/servers/routes/handle/reverse_proxy/upstreams/" target="_blank">帮助</a></div><div class="fht-cell"></div></th>
                 <th style="" data-field="match"><div class="th-inner ">匹配类型<a href="https://caddyserver.com/docs/json/apps/http/servers/routes/match/" target="_blank">帮助</a></div><div class="fht-cell"></div></th>
-                <th style="" data-field="match-value"><div class="th-inner ">匹配规则</div><div class="fht-cell"></div></th>
+                <th style="" data-field="match-value"><div class="th-inner ">匹配域名</div><div class="fht-cell"></div></th>
                 <th style="text-align: center; " data-field="index"><div class="th-inner ">编辑</div><div class="fht-cell"></div></th>
             </tr>
             <tr v-for="(item, index) in caddyRoutes">
@@ -39,7 +39,7 @@ let sitelistTemplate = Vue.extend({
                                 <div class="col-lg-6">
                                     <template v-for="h3 in h2.match">
                                         <template v-for="h4 in h3.path">
-                                            <span>{{h4}}</span>
+                                            <span>{{h4}}&nbsp;</span>
                                         </template>
                                     </template>
                                 </div>

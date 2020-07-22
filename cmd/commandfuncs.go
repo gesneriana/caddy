@@ -721,7 +721,7 @@ func cmdWebGui(fl Flags) (int, error) {
 	}
 	// 自动热重载配置文件, 不需要再次load
 	go watchConfigFile("./Caddyfile", "caddyfile")
-	web.WebGuiStart()
+	web.GuiStart()
 
 	return caddy.ExitCodeSuccess, nil
 }

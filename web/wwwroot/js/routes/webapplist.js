@@ -11,7 +11,7 @@ let webapplistTemplate = Vue.extend({
             <tr>
                 <th style="" data-field="upsteams"><div class="th-inner ">后端主机(upsteams)<a href="https://caddyserver.com/docs/json/apps/http/servers/routes/handle/reverse_proxy/upstreams/" target="_blank">帮助</a></div><div class="fht-cell"></div></th>
                 <th style="" data-field="match"><div class="th-inner ">匹配类型<a href="https://caddyserver.com/docs/json/apps/http/servers/routes/match/" target="_blank">帮助</a></div><div class="fht-cell"></div></th>
-                <th style="" data-field="match-value"><div class="th-inner ">匹配规则</div><div class="fht-cell"></div></th>
+                <th style="" data-field="match-value"><div class="th-inner ">匹配域名</div><div class="fht-cell"></div></th>
                 <th style="text-align: center; " data-field="index"><div class="th-inner ">编辑</div><div class="fht-cell"></div></th>
             </tr>
             <tr v-for="(item, index) in caddyRoutes">
@@ -29,7 +29,7 @@ let webapplistTemplate = Vue.extend({
                                 <div class="col-lg-6">
                                     <template v-for="h3 in h2.match">
                                         <template v-for="h4 in h3.path">
-                                            <span>{{h4}}</span>
+                                            <span>{{h4}}&nbsp;</span>
                                         </template>
                                     </template>
                                 </div>
@@ -56,6 +56,7 @@ let webapplistTemplate = Vue.extend({
                 <td class="text-center">
                     <template v-for="m3 in item.match">
                         <template v-for="(mtype, name) in m3">
+                            <button v-if="name==='host'" class='btn btn-primary' @click="gitPull(index)">远程同步</button>
                             <button v-if="name==='host'" class='btn btn-primary' @click="uploadWebApp(index)">文件管理</button>
                             <button v-if="name==='host'" class='btn btn-primary' @click="editStartShellScripts(index)">启动脚本</button>
                             <button v-if="name==='host'" class='btn btn-primary' >停止脚本</button>

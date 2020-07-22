@@ -1,5 +1,21 @@
 package model
 
+// RouteMatchPath 是URL中的path正则匹配
+type RouteMatchPath struct {
+	Path []string `json:"path"`
+}
+
+// RoutePath 匹配一个后端服务upstream和path的路由条目
+type RoutePath struct {
+	Handle []struct {
+		Handler   string `json:"handler"`
+		Upstreams []struct {
+			Dial string `json:"dial"`
+		} `json:"upstreams"`
+	} `json:"handle"`
+	Match []RouteMatchPath `json:"match"`
+}
+
 // CaddyJSONConfigModel 是caddy api的json配置文件
 type CaddyJSONConfigModel struct {
 	Admin struct {
@@ -52,18 +68,8 @@ type CaddyJSONConfigModel struct {
 					MaxHeaderBytes    int `json:"max_header_bytes"`
 					Routes            []struct {
 						Handle []struct {
-							Handler string `json:"handler"`
-							Routes  []struct {
-								Handle []struct {
-									Handler   string `json:"handler"`
-									Upstreams []struct {
-										Dial string `json:"dial"`
-									} `json:"upstreams"`
-								} `json:"handle"`
-								Match []struct {
-									Path []string `json:"path"`
-								} `json:"match"`
-							} `json:"routes"`
+							Handler string      `json:"handler"`
+							Routes  []RoutePath `json:"routes"`
 						} `json:"handle"`
 						Match []struct {
 							Host []string `json:"host"`
