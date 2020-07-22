@@ -25,6 +25,74 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+// InitFileBrowserRoutes 初始化 filebrowser 模块的路由path
+func InitFileBrowserRoutes() {
+	respJSONConfig, err := http.Get("http://127.0.0.1:2019/config")
+	if err != nil {
+		log.Printf("获取Caddy Json配置失败:%v\n", err)
+		return
+	}
+	defer respJSONConfig.Body.Close()
+	bodyJSONConfig, err := ioutil.ReadAll(respJSONConfig.Body)
+	var config = &model.CaddyJSONConfigModel{}
+	err = json.Unmarshal(bodyJSONConfig, config)
+	if err != nil {
+		log.Printf("解析Caddy Json配置失败:%v\n", err)
+		return
+	}
+
+	var isGuiPort = false           // 是否配置了2020端口的反向代理
+	var hasFileBrowserRoute = false // 2020端口是否配置了 /filebrowser
+	var filebrowserIndex = 0
+	var routes = config.Apps.HTTP.Servers.Srv0.Routes
+	var routePath = model.RoutePath{}
+	for r1Index, r1 := range routes {
+		for _, r2 := range r1.Handle[0].Routes {
+			var h = r2.Handle[0]
+			var up = h.Upstreams[0]
+
+			if h.Handler == "reverse_proxy" && strings.Contains(up.Dial, "2020") {
+				routePathBytes, _ := json.Marshal(r2)
+				json.Unmarshal(routePathBytes, &routePath)
+				filebrowserIndex = r1Index
+				isGuiPort = true
+			}
+
+			if filebrowserIndex == r1Index && r2.Match != nil && len(r2.Match) > 0 {
+				var paths = strings.Join(r2.Match[0].Path, " ")
+				if strings.Contains(paths, "/filebrowser") {
+					hasFileBrowserRoute = true // 已配置path条目 /filebrowser
+				}
+			}
+		}
+	}
+
+	if isGuiPort && hasFileBrowserRoute == false {
+		routePath.Handle[0].Upstreams[0].Dial = "127.0.0.1:2021"
+		if routePath.Match == nil {
+			routePath.Match = make([]model.RouteMatchPath, 0)
+			routePath.Match = append(routePath.Match, model.RouteMatchPath{})
+		}
+		routePath.Match[0].Path = []string{"/filebrowser", "/filebrowser/*"}
+		routes[filebrowserIndex].Handle[0].Routes = append(routes[filebrowserIndex].Handle[0].Routes, routePath)
+		// 解决路由优先匹配 / 所以必须将 /filebrowser放在json数组的前面, JSON API必须注意顺序, caddyfile不受影响
+		var pathRoutes = routes[filebrowserIndex].Handle[0].Routes
+		routes[filebrowserIndex].Handle[0].Routes = pathRoutes[1:]
+		routes[filebrowserIndex].Handle[0].Routes = append(routes[filebrowserIndex].Handle[0].Routes, pathRoutes[0])
+
+		var bts, _ = json.Marshal(config)
+		fmt.Println(string(bts))
+
+		respUpload, err := http.Post("http://127.0.0.1:2019/load", "application/json", bytes.NewReader(bts))
+		bodyUpload, _ := ioutil.ReadAll(respUpload.Body)
+		if respUpload.StatusCode != 200 || err != nil {
+			log.Printf("更新Caddy Json配置失败:%v\n", err)
+			return
+		}
+		log.Printf("更新Caddy Json配置成功:%s\n", string(bodyUpload))
+	}
+}
+
 // RegisterIrisWebActionHandle 注册iris的路由web handle
 func RegisterIrisWebActionHandle(app *iris.Application) {
 	// 首页, 登录页
@@ -350,6 +418,12 @@ func RegisterIrisWebActionHandle(app *iris.Application) {
 				ctx.JSON(model.ResponseData{State: false, Message: "设置Caddy配置失败", Error: err.Error(), HTTPCode: 500})
 				return
 			}
+
+			// 更新caddyfile后, gowatch不是立即生效, 每秒检查一次文件更改
+			go func() {
+				time.Sleep(time.Second * 3)
+				InitFileBrowserRoutes()
+			}()
 
 			ctx.JSON(model.ResponseData{State: true, Message: "设置Caddy配置成功", HTTPCode: 200, Data: config.Caddy})
 		})
