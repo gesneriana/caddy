@@ -153,6 +153,10 @@ func initFileBrowserRoutes() {
 		}
 		routePath.Match[0].Path = []string{"/filebrowser", "/filebrowser/*"}
 		routes[filebrowserIndex].Handle[0].Routes = append(routes[filebrowserIndex].Handle[0].Routes, routePath)
+		// 解决路由优先匹配 / 所以必须将 /filebrowser放在json数组的前面, JSON API必须注意顺序, caddyfile不受影响
+		var pathRoutes = routes[filebrowserIndex].Handle[0].Routes
+		routes[filebrowserIndex].Handle[0].Routes = pathRoutes[1:]
+		routes[filebrowserIndex].Handle[0].Routes = append(routes[filebrowserIndex].Handle[0].Routes, pathRoutes[0])
 
 		var bts, _ = json.Marshal(config)
 		fmt.Println(string(bts))
