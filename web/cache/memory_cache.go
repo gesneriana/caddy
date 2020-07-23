@@ -26,6 +26,7 @@ func GetCacheData(key string, val interface{}) (err error) {
 
 	v, err := MemoryCache.Get([]byte(key))
 	if err != nil {
+		log.Println(err)
 		return err
 	}
 

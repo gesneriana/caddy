@@ -10,16 +10,16 @@ import (
 
 	"github.com/caddyserver/caddy/v2/web/common"
 	"github.com/caddyserver/caddy/v2/web/controllers"
+	"github.com/caddyserver/caddy/v2/web/sync"
 
 	"github.com/kataras/iris/v12"
 )
 
-// 初始化filebrowser模块
-func initLinuxFileBrowser() {
+func createWebAppDir() bool {
 	_, err := os.Stat("./filebrowser")
 	if err != nil {
 		log.Printf("[Error] ./filebrowser dir not exist: %v\n", err)
-		return
+		return false
 	}
 
 	_, err = os.Stat("./filebrowser/webapp")
@@ -30,13 +30,24 @@ func initLinuxFileBrowser() {
 			exPath := filepath.Dir(dir)
 			if err := os.Mkdir(exPath+"/filebrowser/webapp", os.ModePerm); err != nil {
 				fmt.Println(err)
-				return
+				return false
 			}
+			return true
 		}
+		fmt.Println(err)
+		return false
+	}
+
+	return true
+}
+
+// 初始化filebrowser模块
+func initLinuxFileBrowser() {
+	if createWebAppDir() == false {
 		return
 	}
 
-	_, err = os.Stat("./filebrowser/filebrowser.db")
+	_, err := os.Stat("./filebrowser/filebrowser.db")
 	if err == nil {
 		log.Printf("./filebrowser/filebrowser.db already exists")
 	} else {
@@ -52,26 +63,18 @@ func initLinuxFileBrowser() {
 	}
 
 	go func() {
-		command := `cd ./filebrowser/webapp && ../filebrowser -d ../filebrowser.db`
-		cmd := exec.Command("/bin/bash", "-c", command)
-		output, err := cmd.Output()
-		if err != nil {
-			fmt.Printf("Execute Shell:%s failed with error:%s", command, err.Error())
-			return
-		}
-		fmt.Printf("Execute Shell:%s finished with output:\n%s", command, string(output))
+		shell := `cd ./filebrowser/webapp && ../filebrowser -d ../filebrowser.db`
+		common.RunShellCommand(shell)
 	}()
 
 }
 
 func initWindowsFileBrowser() {
-	_, err := os.Stat("./filebrowser")
-	if err != nil {
-		log.Printf("[Error] ./filebrowser dir not exist: %v\n", err)
+	if createWebAppDir() == false {
 		return
 	}
 
-	_, err = os.Stat("./filebrowser/filebrowser.db")
+	_, err := os.Stat("./filebrowser/filebrowser.db")
 	if err == nil {
 		log.Printf("./filebrowser/filebrowser.db already exists")
 	} else {
@@ -86,14 +89,8 @@ func initWindowsFileBrowser() {
 	}
 
 	go func() {
-		command := `.\\filebrowser\\start.bat`
-		cmd := exec.Command(command)
-		output, err := cmd.Output()
-		if err != nil {
-			fmt.Printf("Execute Shell:%s failed with error:%s", command, err.Error())
-			return
-		}
-		fmt.Printf("Execute Shell:%s finished with output:\n%s", command, string(output))
+		shell := `cd filebrowser & cd webapp & ..\\filebrowser.exe -d ..\\filebrowser.db`
+		common.RunShellCommand(shell)
 	}()
 
 }
@@ -110,6 +107,7 @@ func GuiStart() {
 	} else if runtime.GOOS == "linux" {
 		initLinuxFileBrowser()
 	}
+	sync.StartFileSync()
 	controllers.InitFileBrowserRoutes()
 
 	app := iris.Default()

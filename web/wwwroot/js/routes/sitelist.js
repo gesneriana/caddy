@@ -127,7 +127,7 @@ let sitelistTemplate = Vue.extend({
             url: "/caddy/site_list",
             datatype: 'json',
             success: function (resp) {
-                if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data.length > 0) {
+                if (resp.code == 200 && resp.state == true && resp.data != null && resp.data != "null" && resp.data.length > 0) {
                     _this.caddyConfig = JSON.parse(resp.data);
                     _this.caddyRoutes = _this.caddyConfig.apps.http.servers.srv0.routes;
                     // console.log(_this.caddyRoutes);

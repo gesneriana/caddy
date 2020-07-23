@@ -33,3 +33,4 @@ cmd/caddy/filebrowser/CHANGELOG.md
 cmd/caddy/filebrowser/filebrowser.db
 cmd/caddy/filebrowser/LICENSE
 cmd/caddy/filebrowser/README.md
+cmd/caddy/filebrowser/webapp/jp.kizuna.top/shell_config.json

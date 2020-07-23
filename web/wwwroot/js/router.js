@@ -7,6 +7,7 @@ const routes = [
     { path: '/pwdmanage', name: 'pwdmanage', component: pwdmanageTemplate },
     { path: '/certlist', name: 'certlist', component: certlistTemplate },
     { path: '/webapplist', name: 'webapplist', component: webapplistTemplate },
+    { path: '/gitSyncConfig', name: 'gitSyncConfig', component: gitSyncConfigTemplate },
 ]
 
 const router = new VueRouter({

@@ -56,10 +56,10 @@ let webapplistTemplate = Vue.extend({
                 <td class="text-center">
                     <template v-for="m3 in item.match">
                         <template v-for="(mtype, name) in m3">
-                            <button v-if="name==='host'" class='btn btn-primary' @click="gitPull(index)">远程同步</button>
+                            <button v-if="name==='host'" class='btn btn-primary' @click="shellConfig(index)">脚本管理</button>
                             <button v-if="name==='host'" class='btn btn-primary' @click="uploadWebApp(index)">文件管理</button>
-                            <button v-if="name==='host'" class='btn btn-primary' @click="editStartShellScripts(index)">启动脚本</button>
-                            <button v-if="name==='host'" class='btn btn-primary' >停止脚本</button>
+                            <button v-if="name==='host'" class='btn btn-primary' @click="ExceStartShell(index)">启动</button>
+                            <button v-if="name==='host'" class='btn btn-primary' @click="ExceStopShell(index)">停止</button>
                         </template>
                     </template>
                 </td>
@@ -75,6 +75,17 @@ let webapplistTemplate = Vue.extend({
         }
     },
     methods: {
+        shellConfig: function (index) {
+            var domain = this.caddyRoutes[index].match[0].host[0];
+            if (domain.length > 0) {
+                this.$router.push({
+                    path: '/gitSyncConfig',
+                    query: {
+                        domain: domain
+                    }
+                });
+            }
+        },
         addSiteConfig: function () {
             this.$router.push({
                 path: '/addsite',
@@ -101,12 +112,11 @@ let webapplistTemplate = Vue.extend({
                 }
             });
         },
-        editStartShellScripts: function (index) {
-            // console.log(this.caddyRoutes[index]);
-            this.caddyRoutes.splice(index, 1);
-            var _this = this;
-            // 还需要优化filebrowser模块的caddy路由自动化配置, 将端口为2020的域名添加 path路由匹配filebrowser模块
-            console.log(this.caddyConfig);
+        ExceStartShell: function (index) {
+            var domain = this.caddyRoutes[index].match[0].host[0];
+        },
+        ExceStopShell: function (index) {
+            var domain = this.caddyRoutes[index].match[0].host[0];
         },
     },
     mounted: function () {

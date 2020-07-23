@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -376,6 +377,81 @@ func RegisterIrisWebActionHandle(app *iris.Application) {
 
 			ctx.JSON(model.ResponseData{State: true, Message: "web app目录已存在", Data: "/filebrowser/files/" + domain, HTTPCode: 200})
 			return
+		})
+
+		p.Get("/GitSyncConfig", func(ctx iris.Context) {
+			var shellConfigMap map[string]model.ShellConfig
+			shellConfigMap = make(map[string]model.ShellConfig)
+			err := cache.GetCacheData("SyncShellConfigList", &shellConfigMap)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "从缓存中读取配置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+			bts, _ := json.Marshal(shellConfigMap)
+			ctx.JSON(model.ResponseData{State: true, Message: "从缓存中读取配置成功", Data: string(bts), HTTPCode: 200})
+		})
+
+		p.Post("/GitSyncConfig", func(ctx iris.Context) {
+			var shellConfig = &model.ShellConfig{}
+			err := ctx.ReadForm(shellConfig)
+			if err != nil || len(shellConfig.Domain) == 0 {
+				ctx.JSON(model.ResponseData{State: false, Message: "读取表单内容失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			if shellConfig.Interval < 10 || shellConfig.Interval > 600 {
+				shellConfig.Interval = 60
+			}
+
+			_, err = os.Stat("./filebrowser/webapp/" + shellConfig.Domain)
+			if err != nil {
+				if os.IsNotExist(err) {
+					//创建目录
+					dir, _ := os.Executable()
+					exPath := filepath.Dir(dir)
+					if err := os.Mkdir(exPath+"/filebrowser/webapp/"+shellConfig.Domain, os.ModePerm); err != nil {
+						fmt.Println(err)
+						ctx.JSON(model.ResponseData{State: false, Message: "写入配置失败", Error: err.Error(), HTTPCode: 500})
+						return
+					}
+				}
+				ctx.JSON(model.ResponseData{State: false, Message: "写入配置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			// 非必填, 可以手动上传可执行程序到webapp下的 domain 目录
+			if len(shellConfig.InitShell) > 0 {
+				var shell = ""
+				if runtime.GOOS == "windows" {
+					shell = fmt.Sprintf("cd ./filebrowser/webapp/%s & ", shellConfig.Domain)
+				} else if runtime.GOOS == "linux" {
+					shell = fmt.Sprintf("cd ./filebrowser/webapp/%s && ", shellConfig.Domain)
+				}
+				result, err := common.RunShellCommand(shell + shellConfig.InitShell)
+				if err != nil {
+					shellConfig.IsInit = false
+					fmt.Println("初始化shell执行失败:", result, err)
+				} else {
+					shellConfig.IsInit = true
+				}
+			}
+
+			bts, _ := json.Marshal(shellConfig)
+			err = ioutil.WriteFile("./filebrowser/webapp/"+shellConfig.Domain+"/shell_config.json", bts, os.ModePerm)
+			if err != nil {
+				ctx.JSON(model.ResponseData{State: false, Message: "写入配置失败", Error: err.Error(), HTTPCode: 500})
+				return
+			}
+
+			var shellConfigMap map[string]model.ShellConfig
+			shellConfigMap = make(map[string]model.ShellConfig)
+			err = cache.GetCacheData("SyncShellConfigList", &shellConfigMap)
+			if err == nil {
+				shellConfigMap[shellConfig.Domain] = *shellConfig
+				cache.SetCacheData("SyncShellConfigList", shellConfigMap)
+			}
+
+			ctx.JSON(model.ResponseData{State: true, Message: "写入配置成功", Data: string(bts), HTTPCode: 200})
 		})
 	})
 
