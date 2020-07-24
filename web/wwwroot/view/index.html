@@ -96,6 +96,8 @@
                             // console.log(data.responseJSON);
                             if (data.responseText.length > 0 && data.responseJSON != undefined && data.responseJSON.code == 301) {
                                 location.href = data.responseJSON.data;
+                            } else if (data.responseText.length > 0 && data.responseJSON != undefined && data.responseJSON.code != 200) {
+                                console.log(data.responseJSON);
                             }
                         } else {
                             console.log(data.response);

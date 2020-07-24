@@ -48,18 +48,18 @@ let webapplistTemplate = Vue.extend({
                     <template v-for="m2 in item.match">
                         <template v-for="(mtype, name) in m2">
                             <template v-for="mvalue in mtype">
-                                <span>{{mvalue}}</span>&nbsp;
+                                <span>{{mvalue}}</span>&nbsp; 
                             </template>
                         </template>
                     </template>
                 </td>
                 <td class="text-center">
                     <template v-for="m3 in item.match">
-                        <template v-for="(mtype, name) in m3">
-                            <button v-if="name==='host'" class='btn btn-primary' @click="shellConfig(index)">脚本管理</button>
-                            <button v-if="name==='host'" class='btn btn-primary' @click="uploadWebApp(index)">文件管理</button>
-                            <button v-if="name==='host'" class='btn btn-primary' @click="ExceStartShell(index)">启动</button>
-                            <button v-if="name==='host'" class='btn btn-primary' @click="ExceStopShell(index)">停止</button>
+                        <template v-for="(mtype, name) in m3" v-if="name==='host'">
+                            <button class='btn btn-primary' @click="shellConfig(index)">脚本管理</button>
+                            <button class='btn btn-primary' v-bind:title="'/filebrowser/files/' + mtype[0]" @click="uploadWebApp(index)">文件管理</button>
+                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].start_shell" @click="ExceStartShell(index)">启动</button>
+                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].stop_shell" @click="ExceStopShell(index)">停止</button> 
                         </template>
                     </template>
                 </td>
@@ -71,7 +71,8 @@ let webapplistTemplate = Vue.extend({
     data: function () {
         return {
             caddyConfig: {},
-            caddyRoutes: []
+            caddyRoutes: [],
+            shellConfigMap: {}
         }
     },
     methods: {
@@ -114,9 +115,33 @@ let webapplistTemplate = Vue.extend({
         },
         ExceStartShell: function (index) {
             var domain = this.caddyRoutes[index].match[0].host[0];
+            // 请求后台执行预先配置的shell脚本
+            $.ajax({
+                type: "post",
+                url: "/home/ExecShell",
+                data: "domain=" + domain + "&shell_type=start",
+                datatype: 'json',
+                success: function (resp) {
+                    if (resp.code == 200 && resp.state == true && resp.data.length > 0) {
+                        console.log(resp);
+                    }
+                }
+            });
         },
         ExceStopShell: function (index) {
             var domain = this.caddyRoutes[index].match[0].host[0];
+            // 请求后台执行预先配置的shell脚本
+            $.ajax({
+                type: "post",
+                url: "/home/ExecShell",
+                data: "domain=" + domain + "&shell_type=stop",
+                datatype: 'json',
+                success: function (resp) {
+                    if (resp.code == 200 && resp.state == true && resp.data.length > 0) {
+                        console.log(resp);
+                    }
+                }
+            });
         },
     },
     mounted: function () {
@@ -126,7 +151,7 @@ let webapplistTemplate = Vue.extend({
             url: "/caddy/site_list",
             datatype: 'json',
             success: function (resp) {
-                if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data.length > 0) {
+                if (resp.code == 200 && resp.state == true && resp.data.length > 0) {
                     _this.caddyConfig = JSON.parse(resp.data);
                     _this.caddyRoutes = _this.caddyConfig.apps.http.servers.srv0.routes;
                     // console.log(_this.caddyRoutes);
@@ -136,10 +161,22 @@ let webapplistTemplate = Vue.extend({
 
         $.ajax({
             type: "get",
+            url: "/home/GitSyncConfig",
+            datatype: 'json',
+            success: function (resp) {
+                if (resp.code == 200 && resp.state == true && resp.data.length > 0) {
+                    var configMap = JSON.parse(resp.data);
+                    _this.shellConfigMap = configMap;
+                }
+            }
+        });
+
+        $.ajax({
+            type: "get",
             url: "/home/filebrowsertoken",
             datatype: 'json',
             success: function (resp) {
-                if (resp.code == 200 && resp.data != null && resp.data != "null" && resp.data.length > 0) {
+                if (resp.code == 200 && resp.state == true && resp.data.length > 0) {
                     // console.log(_this.caddyRoutes);
                     localStorage.setItem("jwt", resp.data);
                 }
