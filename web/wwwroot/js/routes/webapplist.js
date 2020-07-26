@@ -58,9 +58,9 @@ let webapplistTemplate = Vue.extend({
                         <template v-for="(mtype, name) in m3" v-if="name==='host'">
                             <button class='btn btn-primary' @click="shellConfig(index)">脚本管理</button>
                             <button class='btn btn-primary' v-bind:title="'/filebrowser/files/' + mtype[0]" @click="uploadWebApp(index)">文件管理</button>
-                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].start_shell" @click="ExceStartShell(index)">启动</button>
-                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' title="后台自动执行 kill -9 pid" @click="ExceStopShell(index)">停止</button>
-                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].sync_shell" @click="ExceSyncShell(index)">同步</button> 
+                            <button v-if="shellConfigMap[mtype[0]] && shellConfigMap[mtype[0]].start_shell" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].start_shell" @click="ExceStartShell(index)">启动</button>
+                            <button v-if="shellConfigMap[mtype[0]] && shellConfigMap[mtype[0]].start_shell" class='btn btn-primary' title="后台自动执行 kill -9 pid" @click="ExceStopShell(index)">停止</button>
+                            <button v-if="shellConfigMap[mtype[0]] && shellConfigMap[mtype[0]].sync_shell" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].sync_shell" @click="ExceSyncShell(index)">同步</button> 
                         </template>
                     </template>
                 </td>
