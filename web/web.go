@@ -63,7 +63,7 @@ func initLinuxFileBrowser() {
 	}
 
 	go func() {
-		shell := `cd ./filebrowser/webapp && ../filebrowser -d ../filebrowser.db`
+		shell := `cd ./filebrowser && chmod 777 ./filebrowser && cd ./webapp && ../filebrowser -d ../filebrowser.db`
 		common.RunShellCommand(shell)
 	}()
 
