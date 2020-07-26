@@ -11,6 +11,5 @@ type ShellConfig struct {
 	Interval         int       `json:"interval"`
 	LastSyncTime     time.Time `json:"last_sync_time"`
 	StartShell       string    `json:"start_shell"`
-	StopShell        string    `json:"stop_shell"`
 	VerificationCode string    `json:"verification_code"`
 }

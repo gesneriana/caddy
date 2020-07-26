@@ -59,7 +59,8 @@ let webapplistTemplate = Vue.extend({
                             <button class='btn btn-primary' @click="shellConfig(index)">脚本管理</button>
                             <button class='btn btn-primary' v-bind:title="'/filebrowser/files/' + mtype[0]" @click="uploadWebApp(index)">文件管理</button>
                             <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].start_shell" @click="ExceStartShell(index)">启动</button>
-                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].stop_shell" @click="ExceStopShell(index)">停止</button> 
+                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' title="后台自动执行 kill -9 pid" @click="ExceStopShell(index)">停止</button>
+                            <button v-if="shellConfigMap[mtype[0]]" class='btn btn-primary' v-bind:title="shellConfigMap[mtype[0]].sync_shell" @click="ExceSyncShell(index)">同步</button> 
                         </template>
                     </template>
                 </td>
@@ -135,6 +136,21 @@ let webapplistTemplate = Vue.extend({
                 type: "post",
                 url: "/home/ExecShell",
                 data: "domain=" + domain + "&shell_type=stop",
+                datatype: 'json',
+                success: function (resp) {
+                    if (resp.code == 200 && resp.state == true && resp.data.length > 0) {
+                        console.log(resp);
+                    }
+                }
+            });
+        },
+        ExceSyncShell: function (index) {
+            var domain = this.caddyRoutes[index].match[0].host[0];
+            // 请求后台执行预先配置的shell脚本
+            $.ajax({
+                type: "post",
+                url: "/home/ExecShell",
+                data: "domain=" + domain + "&shell_type=sync",
                 datatype: 'json',
                 success: function (resp) {
                     if (resp.code == 200 && resp.state == true && resp.data.length > 0) {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2/web/cache"
 	"github.com/caddyserver/caddy/v2/web/common"
+	"github.com/caddyserver/caddy/v2/web/controllers/actions"
 	"github.com/caddyserver/caddy/v2/web/filters"
 	"github.com/caddyserver/caddy/v2/web/model"
 	"github.com/caddyserver/caddy/v2/web/model/request"
@@ -454,52 +455,7 @@ func RegisterIrisWebActionHandle(app *iris.Application) {
 			ctx.JSON(model.ResponseData{State: true, Message: "写入配置成功", Data: string(bts), HTTPCode: 200})
 		})
 
-		p.Post("/ExecShell", func(ctx iris.Context) {
-			var domain = ctx.FormValue("domain")
-			var shellType = ctx.FormValue("shell_type")
-
-			var shellConfigMap map[string]model.ShellConfig
-			shellConfigMap = make(map[string]model.ShellConfig)
-			err := cache.GetCacheData("SyncShellConfigList", &shellConfigMap)
-			if err != nil {
-				ctx.JSON(model.ResponseData{State: false, Message: "读取配置失败", Error: err.Error(), HTTPCode: 500})
-				return
-			}
-
-			if shellConfig, ok := shellConfigMap[domain]; ok {
-				var shell = ""
-				if runtime.GOOS == "windows" {
-					shell = fmt.Sprintf("cd ./filebrowser/webapp/%s & ", shellConfig.Domain)
-				} else if runtime.GOOS == "linux" {
-					shell = fmt.Sprintf("cd ./filebrowser/webapp/%s && ", shellConfig.Domain)
-				}
-
-				var result = ""
-				switch shellType {
-				case "start":
-					if len(shellConfig.StartShell) > 0 {
-						result, err = common.RunShellCommand(shell + shellConfig.StartShell)
-					}
-				case "stop":
-					if len(shellConfig.StopShell) > 0 {
-						result, err = common.RunShellCommand(shell + shellConfig.StopShell)
-					}
-				case "sync":
-					if len(shellConfig.SyncShell) > 0 {
-						result, err = common.RunShellCommand(shell + shellConfig.SyncShell)
-					}
-				default:
-					ctx.JSON(model.ResponseData{State: false, Message: "无效的指令:" + shellType, HTTPCode: 400})
-					return
-				}
-				fmt.Println("ExecShell执行结果:", result, err)
-				ctx.JSON(model.ResponseData{State: true, Message: "shell执行完成", Data: result, HTTPCode: 400})
-				return
-			}
-
-			ctx.JSON(model.ResponseData{State: false, Message: "无效的参数domain:" + domain, HTTPCode: 400})
-			return
-		})
+		p.Post("/ExecShell", actions.ExecShell)
 	})
 
 	// 需要验证cookie的授权, 分组action

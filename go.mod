@@ -3,6 +3,7 @@ module github.com/caddyserver/caddy/v2
 go 1.14
 
 require (
+	github.com/Joker/jade v1.0.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.1.0
 	github.com/alecthomas/chroma v0.7.4-0.20200517063913-500529fd43c1
 	github.com/aryann/difflib v0.0.0-20170710044230-e206f873d14a
@@ -10,11 +11,15 @@ require (
 	github.com/caddyserver/certmagic v0.11.2
 	github.com/coocood/freecache v1.1.1
 	github.com/dustin/go-humanize v1.0.1-0.20200219035652-afde56e7acac
+	github.com/flosch/pongo2 v0.0.0-20200529170236-5abacdfa4915 // indirect
 	github.com/go-acme/lego/v3 v3.7.0
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/google/cel-go v0.5.1
+	github.com/gorilla/schema v1.1.0 // indirect
 	github.com/gorilla/websocket v1.4.1
+	github.com/iris-contrib/formBinder v5.0.0+incompatible // indirect
 	github.com/jsternberg/zap-logfmt v1.2.0
+	github.com/kataras/iris v11.1.1+incompatible
 	github.com/kataras/iris/v12 v12.1.8
 	github.com/klauspost/compress v1.10.10
 	github.com/klauspost/cpuid v1.2.5

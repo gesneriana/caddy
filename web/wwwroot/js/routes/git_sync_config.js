@@ -41,14 +41,9 @@ let gitSyncConfigTemplate = Vue.extend({
             </div>
             <div class="form-group">
                 <label class="control-lable col-lg-2">启动脚本</label>
-                <div class="col-lg-10">
-                    <input name="StartShell" class="form-control" type="text" v-model="start_shell" placeholder="cd ./trojan-go; ./trojan-go -c ./config.json">
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="control-lable col-lg-2">停止脚本</label>
-                <div class="col-lg-10">
-                    <input name="StopShell" class="form-control" type="text" v-model="stop_shell" placeholder="sudo pkill trojan-go">
+                <div class="col-lg-10" >
+                    <div><input name="StartShell" class="form-control" type="text" v-model="start_shell" placeholder="cd ./trojan-go; chmod 777 ./trojan-go; ./trojan-go -c ./config.json"></div>
+                    <div class="text-info">windows下不支持用cmd执行脚本启动程序,否则无法结束进程,建议使用指定相对路径的方式启动(不支持命令行参数,可以考虑使用配置文件), 例如: \\trojan-go\\trojan-go.exe</div>
                 </div>
             </div>
             <div class="form-group">
@@ -74,7 +69,6 @@ let gitSyncConfigTemplate = Vue.extend({
             sync_shell: "",
             interval: 60,
             start_shell: "",
-            stop_shell: "",
             verification_code: ""
         }
     },
@@ -101,7 +95,6 @@ let gitSyncConfigTemplate = Vue.extend({
                     _this.sync_shell = config.sync_shell;
                     _this.interval = config.interval;
                     _this.start_shell = config.start_shell;
-                    _this.stop_shell = config.stop_shell;
                 }
             }
         });
