@@ -13,22 +13,19 @@ import (
 	"strings"
 )
 
-/*
- * CopyDir 拷贝文件夹,同时拷贝文件夹中的文件
- * @param srcPath  		需要拷贝的文件夹路径: D:/test
- * @param destPath		拷贝到的位置: D:/backup/
- */
+// CopyDir 拷贝文件夹,同时拷贝文件夹中的文件
 func CopyDir(srcPath string, destPath string) error {
 	//检测目录正确性
-	if srcInfo, err := os.Stat(srcPath); err != nil {
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
 		fmt.Println(err.Error())
 		return err
-	} else {
-		if !srcInfo.IsDir() {
-			e := errors.New("srcPath不是一个正确的目录！")
-			fmt.Println(e.Error())
-			return e
-		}
+	}
+
+	if !srcInfo.IsDir() {
+		e := errors.New("srcPath不是一个正确的目录！")
+		fmt.Println(e.Error())
+		return e
 	}
 
 	if destInfo, err := os.Stat(destPath); err != nil {
@@ -58,7 +55,7 @@ func CopyDir(srcPath string, destPath string) error {
 		}
 	}
 
-	err := filepath.Walk(srcPath, func(path string, f os.FileInfo, err error) error {
+	err = filepath.Walk(srcPath, func(path string, f os.FileInfo, err error) error {
 		if f == nil {
 			return err
 		}
