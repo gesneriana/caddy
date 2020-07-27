@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 )
@@ -13,6 +14,12 @@ func RunShellCommand(shell string) (result string, err error) {
 		cmd = exec.Command("cmd.exe", "/c", shell)
 	} else if runtime.GOOS == "linux" {
 		cmd = exec.Command("/bin/bash", "-c", shell)
+	}
+
+	file, err := os.Create("./filebrowser/webapp/exec_shell_err.log")
+	defer file.Close()
+	if file != nil {
+		cmd.Stderr = file // 重定向错误输出到文件中,方便查看
 	}
 
 	output, err := cmd.Output()

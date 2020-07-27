@@ -68,6 +68,7 @@ func ExecShell(ctx iris.Context) {
 								fmt.Println(err)
 								resultChan <- "path err:" + err.Error()
 								close(resultChan)
+								cancel()
 								return
 							}
 							cmd.Dir = filepath.Dir(path)
