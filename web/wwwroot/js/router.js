@@ -8,6 +8,7 @@ const routes = [
     { path: '/certlist', name: 'certlist', component: certlistTemplate },
     { path: '/webapplist', name: 'webapplist', component: webapplistTemplate },
     { path: '/gitSyncConfig', name: 'gitSyncConfig', component: gitSyncConfigTemplate },
+    { path: '/addcaddyserver', name: 'addcaddyserver', component: addcaddyserverTemplate },
 ]
 
 const router = new VueRouter({

@@ -116,6 +116,8 @@ func GuiStart() {
 
 	// 注册视图文件目录, 不需要再为每个视图注册路由, 可以使用vue.js请求api获取数据
 	app.HandleDir("/view", "./wwwroot/view")
+	app.HandleDir("/js", "./wwwroot/js")
+	app.HandleDir("/lib", "./wwwroot/lib")
 	app.HandleDir("/wwwroot", "./wwwroot")
 
 	controllers.RegisterIrisWebActionHandle(app)
