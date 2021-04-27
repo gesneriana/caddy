@@ -42,7 +42,7 @@ let gitSyncConfigTemplate = Vue.extend({
             <div class="form-group">
                 <label class="control-lable col-lg-2">启动脚本</label>
                 <div class="col-lg-10" >
-                    <div><input name="StartShell" class="form-control" type="text" v-model="start_shell" placeholder="cd ./trojan-go; chmod 777 ./trojan-go; ./trojan-go -c ./config.json"></div>
+                    <div><input name="StartShell" class="form-control" type="text" v-model="start_shell" placeholder="pkill trojan-go; cd ./trojan-go; chmod 777 ./trojan-go; ./trojan-go -c ./config.json"></div>
                     <div class="text-info">windows下不支持用cmd执行脚本启动程序,否则无法结束进程,建议使用指定相对路径的方式启动(不支持命令行参数,可以考虑使用配置文件), 例如: \\trojan-go\\trojan-go.exe</div>
                 </div>
             </div>
