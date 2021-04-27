@@ -27,13 +27,11 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-func (fsrv *FileServer) directoryListing(files []os.FileInfo, canGoUp bool, urlPath string, repl *caddy.Replacer) browseListing {
+func (fsrv *FileServer) directoryListing(files []os.FileInfo, canGoUp bool, root, urlPath string, repl *caddy.Replacer) browseListing {
 	filesToHide := fsrv.transformHidePaths(repl)
 
-	var (
-		fileInfos           []fileInfo
-		dirCount, fileCount int
-	)
+	var dirCount, fileCount int
+	fileInfos := []fileInfo{}
 
 	for _, f := range files {
 		name := f.Name()
@@ -42,7 +40,7 @@ func (fsrv *FileServer) directoryListing(files []os.FileInfo, canGoUp bool, urlP
 			continue
 		}
 
-		isDir := f.IsDir() || isSymlinkTargetDir(f, fsrv.Root, urlPath)
+		isDir := f.IsDir() || isSymlinkTargetDir(f, root, urlPath)
 
 		if isDir {
 			name += "/"
@@ -76,43 +74,41 @@ func (fsrv *FileServer) directoryListing(files []os.FileInfo, canGoUp bool, urlP
 
 type browseListing struct {
 	// The name of the directory (the last element of the path).
-	Name string
+	Name string `json:"name"`
 
 	// The full path of the request.
-	Path string
+	Path string `json:"path"`
 
 	// Whether the parent directory is browseable.
-	CanGoUp bool
+	CanGoUp bool `json:"can_go_up"`
 
 	// The items (files and folders) in the path.
-	Items []fileInfo
-
-	// The number of directories in the listing.
-	NumDirs int
-
-	// The number of files (items that aren't directories) in the listing.
-	NumFiles int
-
-	// Sort column used
-	Sort string
-
-	// Sorting order
-	Order string
-
-	// If ≠0 then Items have been limited to that many elements.
-	ItemsLimitedTo int
+	Items []fileInfo `json:"items,omitempty"`
 
 	// If ≠0 then Items starting from that many elements.
-	ItemOffset int
+	Offset int `json:"offset,omitempty"`
+
+	// If ≠0 then Items have been limited to that many elements.
+	Limit int `json:"limit,omitempty"`
+
+	// The number of directories in the listing.
+	NumDirs int `json:"num_dirs"`
+
+	// The number of files (items that aren't directories) in the listing.
+	NumFiles int `json:"num_files"`
+
+	// Sort column used
+	Sort string `json:"sort,omitempty"`
+
+	// Sorting order
+	Order string `json:"order,omitempty"`
 }
 
 // Breadcrumbs returns l.Path where every element maps
 // the link to the text to display.
 func (l browseListing) Breadcrumbs() []crumb {
-	var result []crumb
-
 	if len(l.Path) == 0 {
-		return result
+		return []crumb{}
 	}
 
 	// skip trailing slash
@@ -122,13 +118,13 @@ func (l browseListing) Breadcrumbs() []crumb {
 	}
 
 	parts := strings.Split(lpath, "/")
-	for i := range parts {
-		txt := parts[i]
-		if i == 0 && parts[i] == "" {
-			txt = "/"
+	result := make([]crumb, len(parts))
+	for i, p := range parts {
+		if i == 0 && p == "" {
+			p = "/"
 		}
 		lnk := strings.Repeat("../", len(parts)-i-1)
-		result = append(result, crumb{Link: lnk, Text: txt})
+		result[i] = crumb{Link: lnk, Text: p}
 	}
 
 	return result
@@ -166,7 +162,7 @@ func (l *browseListing) applySortAndLimit(sortParam, orderParam, limitParam stri
 		offset, _ := strconv.Atoi(offsetParam)
 		if offset > 0 && offset <= len(l.Items) {
 			l.Items = l.Items[offset:]
-			l.ItemOffset = offset
+			l.Offset = offset
 		}
 	}
 
@@ -175,7 +171,7 @@ func (l *browseListing) applySortAndLimit(sortParam, orderParam, limitParam stri
 
 		if limit > 0 && limit <= len(l.Items) {
 			l.Items = l.Items[:limit]
-			l.ItemsLimitedTo = limit
+			l.Limit = limit
 		}
 	}
 }

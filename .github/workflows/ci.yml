@@ -1,6 +1,6 @@
 # Used as inspiration: https://github.com/mvdan/github-actions-golang
 
-name: Cross-Platform
+name: Tests
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
-        go-version: [ 1.14.x ]
+        go: [ '1.15', '1.16' ]
 
         # Set some variables per OS, usable via ${{ matrix.VAR }}
         # CADDY_BIN_PATH: the path to the compiled Caddy binary, for artifact publishing
@@ -39,9 +39,9 @@ jobs:
 
     steps:
     - name: Install Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: ${{ matrix.go }}
 
     - name: Checkout code
       uses: actions/checkout@v2
@@ -64,17 +64,18 @@ jobs:
         go env
         printf "\n\nSystem environment:\n\n"
         env
+        printf "Git version: $(git version)\n\n"
         # Calculate the short SHA1 hash of the git commit
         echo "::set-output name=short_sha::$(git rev-parse --short HEAD)"
         echo "::set-output name=go_cache::$(go env GOCACHE)"
 
     - name: Cache the build cache
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       with:
         path: ${{ steps.vars.outputs.go_cache }}
-        key: ${{ runner.os }}-go-ci-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-${{ matrix.go }}-go-ci-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-ci
+          ${{ runner.os }}-${{ matrix.go }}-go-ci
 
     - name: Get dependencies
       run: |
@@ -91,7 +92,7 @@ jobs:
     - name: Publish Build Artifact
       uses: actions/upload-artifact@v1
       with:
-        name: caddy_v2_${{ runner.os }}_${{ steps.vars.outputs.short_sha }}
+        name: caddy_${{ runner.os }}_go${{ matrix.go }}_${{ steps.vars.outputs.short_sha }}
         path: ${{ matrix.CADDY_BIN_PATH }}
 
     # Commented bits below were useful to allow the job to continue
@@ -124,6 +125,7 @@ jobs:
     name: test (s390x on IBM Z)
     runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
+    continue-on-error: true  # August 2020: s390x VM is down due to weather and power issues
     steps:
       - name: Checkout code into the Go module directory
         uses: actions/checkout@v2
@@ -136,7 +138,7 @@ jobs:
 
           # The environment is fresh, so there's no point in keeping accepting and adding the key.
           rsync -arz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" --progress --delete --exclude '.git' . caddy-ci@ci-s390x.caddyserver.com:/var/tmp/"$short_sha"
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t caddy-ci@ci-s390x.caddyserver.com "cd /var/tmp/$short_sha; CGO_ENABLED=0 /usr/local/go/bin/go test -v ./..."
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t caddy-ci@ci-s390x.caddyserver.com "cd /var/tmp/$short_sha; go version; go env; printf "\n\n";CGO_ENABLED=0 go test -v ./..."
           test_result=$?
 
           # There's no need leaving the files around
@@ -147,26 +149,12 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.S390X_SSH_KEY }}
 
-  # From https://github.com/reviewdog/action-golangci-lint
-  golangci-lint:
-    name: runner / golangci-lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code into the Go module directory
-        uses: actions/checkout@v2
-
-      - name: Run golangci-lint
-        uses: reviewdog/action-golangci-lint@v1
-        # uses: docker://reviewdog/action-golangci-lint:v1 # pre-build docker image
-        with:
-          github_token: ${{ secrets.github_token }}
-
   goreleaser-check:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v2
-      - uses: goreleaser/goreleaser-action@v1
+      - uses: goreleaser/goreleaser-action@v2
         with:
           version: latest
           args: check

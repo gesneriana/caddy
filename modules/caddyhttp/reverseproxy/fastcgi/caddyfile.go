@@ -39,6 +39,10 @@ func init() {
 //         root <path>
 //         split <at>
 //         env <key> <value>
+//         resolve_root_symlink
+//         dial_timeout <duration>
+//         read_timeout <duration>
+//         write_timeout <duration>
 //     }
 //
 func (t *Transport) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
@@ -66,6 +70,42 @@ func (t *Transport) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					t.EnvVars = make(map[string]string)
 				}
 				t.EnvVars[args[0]] = args[1]
+
+			case "resolve_root_symlink":
+				if d.NextArg() {
+					return d.ArgErr()
+				}
+				t.ResolveRootSymlink = true
+
+			case "dial_timeout":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				dur, err := caddy.ParseDuration(d.Val())
+				if err != nil {
+					return d.Errf("bad timeout value %s: %v", d.Val(), err)
+				}
+				t.DialTimeout = caddy.Duration(dur)
+
+			case "read_timeout":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				dur, err := caddy.ParseDuration(d.Val())
+				if err != nil {
+					return d.Errf("bad timeout value %s: %v", d.Val(), err)
+				}
+				t.ReadTimeout = caddy.Duration(dur)
+
+			case "write_timeout":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				dur, err := caddy.ParseDuration(d.Val())
+				if err != nil {
+					return d.Errf("bad timeout value %s: %v", d.Val(), err)
+				}
+				t.WriteTimeout = caddy.Duration(dur)
 
 			default:
 				return d.Errf("unrecognized subdirective %s", d.Val())
@@ -196,6 +236,50 @@ func parsePHPFastCGI(h httpcaddyfile.Helper) ([]httpcaddyfile.ConfigValue, error
 					return nil, dispenser.ArgErr()
 				}
 				indexFile = args[0]
+
+			case "resolve_root_symlink":
+				args := dispenser.RemainingArgs()
+				dispenser.Delete()
+				for range args {
+					dispenser.Delete()
+				}
+				fcgiTransport.ResolveRootSymlink = true
+
+			case "dial_timeout":
+				if !dispenser.NextArg() {
+					return nil, dispenser.ArgErr()
+				}
+				dur, err := caddy.ParseDuration(dispenser.Val())
+				if err != nil {
+					return nil, dispenser.Errf("bad timeout value %s: %v", dispenser.Val(), err)
+				}
+				fcgiTransport.DialTimeout = caddy.Duration(dur)
+				dispenser.Delete()
+				dispenser.Delete()
+
+			case "read_timeout":
+				if !dispenser.NextArg() {
+					return nil, dispenser.ArgErr()
+				}
+				dur, err := caddy.ParseDuration(dispenser.Val())
+				if err != nil {
+					return nil, dispenser.Errf("bad timeout value %s: %v", dispenser.Val(), err)
+				}
+				fcgiTransport.ReadTimeout = caddy.Duration(dur)
+				dispenser.Delete()
+				dispenser.Delete()
+
+			case "write_timeout":
+				if !dispenser.NextArg() {
+					return nil, dispenser.ArgErr()
+				}
+				dur, err := caddy.ParseDuration(dispenser.Val())
+				if err != nil {
+					return nil, dispenser.Errf("bad timeout value %s: %v", dispenser.Val(), err)
+				}
+				fcgiTransport.WriteTimeout = caddy.Duration(dur)
+				dispenser.Delete()
+				dispenser.Delete()
 			}
 		}
 	}

@@ -18,8 +18,11 @@ import (
 	"strconv"
 
 	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddytls"
+	"github.com/caddyserver/certmagic"
+	"github.com/mholt/acmez/acme"
 )
 
 func init() {
@@ -28,25 +31,26 @@ func init() {
 	RegisterGlobalOption("https_port", parseOptHTTPSPort)
 	RegisterGlobalOption("default_sni", parseOptSingleString)
 	RegisterGlobalOption("order", parseOptOrder)
-	RegisterGlobalOption("experimental_http3", parseOptTrue)
 	RegisterGlobalOption("storage", parseOptStorage)
 	RegisterGlobalOption("acme_ca", parseOptSingleString)
 	RegisterGlobalOption("acme_ca_root", parseOptSingleString)
-	RegisterGlobalOption("acme_dns", parseOptSingleString)
+	RegisterGlobalOption("acme_dns", parseOptACMEDNS)
 	RegisterGlobalOption("acme_eab", parseOptACMEEAB)
+	RegisterGlobalOption("cert_issuer", parseOptCertIssuer)
 	RegisterGlobalOption("email", parseOptSingleString)
 	RegisterGlobalOption("admin", parseOptAdmin)
 	RegisterGlobalOption("on_demand_tls", parseOptOnDemand)
 	RegisterGlobalOption("local_certs", parseOptTrue)
 	RegisterGlobalOption("key_type", parseOptSingleString)
 	RegisterGlobalOption("auto_https", parseOptAutoHTTPS)
+	RegisterGlobalOption("servers", parseServerOptions)
+	RegisterGlobalOption("ocsp_stapling", parseOCSPStaplingOptions)
+	RegisterGlobalOption("log", parseLogOptions)
 }
 
-func parseOptTrue(d *caddyfile.Dispenser) (interface{}, error) {
-	return true, nil
-}
+func parseOptTrue(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) { return true, nil }
 
-func parseOptHTTPPort(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptHTTPPort(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	var httpPort int
 	for d.Next() {
 		var httpPortStr string
@@ -62,7 +66,7 @@ func parseOptHTTPPort(d *caddyfile.Dispenser) (interface{}, error) {
 	return httpPort, nil
 }
 
-func parseOptHTTPSPort(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptHTTPSPort(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	var httpsPort int
 	for d.Next() {
 		var httpsPortStr string
@@ -78,7 +82,7 @@ func parseOptHTTPSPort(d *caddyfile.Dispenser) (interface{}, error) {
 	return httpsPort, nil
 }
 
-func parseOptOrder(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptOrder(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	newOrder := directiveOrder
 
 	for d.Next() {
@@ -154,35 +158,46 @@ func parseOptOrder(d *caddyfile.Dispenser) (interface{}, error) {
 	return newOrder, nil
 }
 
-func parseOptStorage(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptStorage(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	if !d.Next() { // consume option name
 		return nil, d.ArgErr()
 	}
 	if !d.Next() { // get storage module name
 		return nil, d.ArgErr()
 	}
-	modName := d.Val()
-	mod, err := caddy.GetModule("caddy.storage." + modName)
-	if err != nil {
-		return nil, d.Errf("getting storage module '%s': %v", modName, err)
-	}
-	unm, ok := mod.New().(caddyfile.Unmarshaler)
-	if !ok {
-		return nil, d.Errf("storage module '%s' is not a Caddyfile unmarshaler", mod.ID)
-	}
-	err = unm.UnmarshalCaddyfile(d.NewFromNextSegment())
+	modID := "caddy.storage." + d.Val()
+	unm, err := caddyfile.UnmarshalModule(d, modID)
 	if err != nil {
 		return nil, err
 	}
 	storage, ok := unm.(caddy.StorageConverter)
 	if !ok {
-		return nil, d.Errf("module %s is not a StorageConverter", mod.ID)
+		return nil, d.Errf("module %s is not a caddy.StorageConverter", modID)
 	}
 	return storage, nil
 }
 
-func parseOptACMEEAB(d *caddyfile.Dispenser) (interface{}, error) {
-	eab := new(caddytls.ExternalAccountBinding)
+func parseOptACMEDNS(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
+	if !d.Next() { // consume option name
+		return nil, d.ArgErr()
+	}
+	if !d.Next() { // get DNS module name
+		return nil, d.ArgErr()
+	}
+	modID := "dns.providers." + d.Val()
+	unm, err := caddyfile.UnmarshalModule(d, modID)
+	if err != nil {
+		return nil, err
+	}
+	prov, ok := unm.(certmagic.ACMEDNSProvider)
+	if !ok {
+		return nil, d.Errf("module %s (%T) is not a certmagic.ACMEDNSProvider", modID, unm)
+	}
+	return prov, nil
+}
+
+func parseOptACMEEAB(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
+	eab := new(acme.EAB)
 	for d.Next() {
 		if d.NextArg() {
 			return nil, d.ArgErr()
@@ -195,11 +210,11 @@ func parseOptACMEEAB(d *caddyfile.Dispenser) (interface{}, error) {
 				}
 				eab.KeyID = d.Val()
 
-			case "hmac":
+			case "mac_key":
 				if !d.NextArg() {
 					return nil, d.ArgErr()
 				}
-				eab.HMAC = d.Val()
+				eab.MACKey = d.Val()
 
 			default:
 				return nil, d.Errf("unrecognized parameter '%s'", d.Val())
@@ -209,7 +224,30 @@ func parseOptACMEEAB(d *caddyfile.Dispenser) (interface{}, error) {
 	return eab, nil
 }
 
-func parseOptSingleString(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptCertIssuer(d *caddyfile.Dispenser, existing interface{}) (interface{}, error) {
+	var issuers []certmagic.Issuer
+	if existing != nil {
+		issuers = existing.([]certmagic.Issuer)
+	}
+	for d.Next() { // consume option name
+		if !d.Next() { // get issuer module name
+			return nil, d.ArgErr()
+		}
+		modID := "tls.issuance." + d.Val()
+		unm, err := caddyfile.UnmarshalModule(d, modID)
+		if err != nil {
+			return nil, err
+		}
+		iss, ok := unm.(certmagic.Issuer)
+		if !ok {
+			return nil, d.Errf("module %s (%T) is not a certmagic.Issuer", modID, unm)
+		}
+		issuers = append(issuers, iss)
+	}
+	return issuers, nil
+}
+
+func parseOptSingleString(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	d.Next() // consume parameter name
 	if !d.Next() {
 		return "", d.ArgErr()
@@ -221,21 +259,43 @@ func parseOptSingleString(d *caddyfile.Dispenser) (interface{}, error) {
 	return val, nil
 }
 
-func parseOptAdmin(d *caddyfile.Dispenser) (interface{}, error) {
-	if d.Next() {
-		var listenAddress string
-		if !d.AllArgs(&listenAddress) {
-			return "", d.ArgErr()
+func parseOptAdmin(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
+	adminCfg := new(caddy.AdminConfig)
+	for d.Next() {
+		if d.NextArg() {
+			listenAddress := d.Val()
+			if listenAddress == "off" {
+				adminCfg.Disabled = true
+				if d.Next() { // Do not accept any remaining options including block
+					return nil, d.Err("No more option is allowed after turning off admin config")
+				}
+			} else {
+				adminCfg.Listen = listenAddress
+				if d.NextArg() { // At most 1 arg is allowed
+					return nil, d.ArgErr()
+				}
+			}
 		}
-		if listenAddress == "" {
-			listenAddress = caddy.DefaultAdminListen
+		for nesting := d.Nesting(); d.NextBlock(nesting); {
+			switch d.Val() {
+			case "enforce_origin":
+				adminCfg.EnforceOrigin = true
+
+			case "origins":
+				adminCfg.Origins = d.RemainingArgs()
+
+			default:
+				return nil, d.Errf("unrecognized parameter '%s'", d.Val())
+			}
 		}
-		return listenAddress, nil
 	}
-	return "", nil
+	if adminCfg.Listen == "" && !adminCfg.Disabled {
+		adminCfg.Listen = caddy.DefaultAdminListen
+	}
+	return adminCfg, nil
 }
 
-func parseOptOnDemand(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptOnDemand(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	var ond *caddytls.OnDemandConfig
 	for d.Next() {
 		if d.NextArg() {
@@ -295,7 +355,7 @@ func parseOptOnDemand(d *caddyfile.Dispenser) (interface{}, error) {
 	return ond, nil
 }
 
-func parseOptAutoHTTPS(d *caddyfile.Dispenser) (interface{}, error) {
+func parseOptAutoHTTPS(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
 	d.Next() // consume parameter name
 	if !d.Next() {
 		return "", d.ArgErr()
@@ -308,4 +368,70 @@ func parseOptAutoHTTPS(d *caddyfile.Dispenser) (interface{}, error) {
 		return "", d.Errf("auto_https must be either 'off' or 'disable_redirects'")
 	}
 	return val, nil
+}
+
+func parseServerOptions(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
+	return unmarshalCaddyfileServerOptions(d)
+}
+
+func parseOCSPStaplingOptions(d *caddyfile.Dispenser, _ interface{}) (interface{}, error) {
+	d.Next() // consume option name
+	var val string
+	if !d.AllArgs(&val) {
+		return nil, d.ArgErr()
+	}
+	if val != "off" {
+		return nil, d.Errf("invalid argument '%s'", val)
+	}
+	return certmagic.OCSPConfig{
+		DisableStapling: val == "off",
+	}, nil
+}
+
+// parseLogOptions parses the global log option. Syntax:
+//
+//     log [name] {
+//         output  <writer_module> ...
+//         format  <encoder_module> ...
+//         level   <level>
+//         include <namespaces...>
+//         exclude <namespaces...>
+//     }
+//
+// When the name argument is unspecified, this directive modifies the default
+// logger.
+//
+func parseLogOptions(d *caddyfile.Dispenser, existingVal interface{}) (interface{}, error) {
+	currentNames := make(map[string]struct{})
+	if existingVal != nil {
+		innerVals, ok := existingVal.([]ConfigValue)
+		if !ok {
+			return nil, d.Errf("existing log values of unexpected type: %T", existingVal)
+		}
+		for _, rawVal := range innerVals {
+			val, ok := rawVal.Value.(namedCustomLog)
+			if !ok {
+				return nil, d.Errf("existing log value of unexpected type: %T", existingVal)
+			}
+			currentNames[val.name] = struct{}{}
+		}
+	}
+
+	var warnings []caddyconfig.Warning
+	// Call out the same parser that handles server-specific log configuration.
+	configValues, err := parseLogHelper(
+		Helper{
+			Dispenser: d,
+			warnings:  &warnings,
+		},
+		currentNames,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(warnings) > 0 {
+		return nil, d.Errf("warnings found in parsing global log options: %+v", warnings)
+	}
+
+	return configValues, nil
 }

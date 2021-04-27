@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig"
+	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
@@ -91,6 +93,66 @@ func (fe *FilterEncoder) Provision(ctx caddy.Context) error {
 		fe.Fields[fieldName] = modIface.(LogFieldFilter)
 	}
 
+	return nil
+}
+
+// UnmarshalCaddyfile sets up the module from Caddyfile tokens. Syntax:
+//
+//     filter {
+//         wrap <another encoder>
+//         fields {
+//             <field> <filter> {
+//                 <filter options>
+//             }
+//         }
+//     }
+func (fe *FilterEncoder) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
+	for d.Next() {
+		for d.NextBlock(0) {
+			switch d.Val() {
+			case "wrap":
+				if !d.NextArg() {
+					return d.ArgErr()
+				}
+				moduleName := d.Val()
+				moduleID := "caddy.logging.encoders." + moduleName
+				unm, err := caddyfile.UnmarshalModule(d, moduleID)
+				if err != nil {
+					return err
+				}
+				enc, ok := unm.(zapcore.Encoder)
+				if !ok {
+					return d.Errf("module %s (%T) is not a zapcore.Encoder", moduleID, unm)
+				}
+				fe.WrappedRaw = caddyconfig.JSONModuleObject(enc, "format", moduleName, nil)
+
+			case "fields":
+				for d.NextBlock(1) {
+					field := d.Val()
+					if !d.NextArg() {
+						return d.ArgErr()
+					}
+					filterName := d.Val()
+					moduleID := "caddy.logging.encoders.filter." + filterName
+					unm, err := caddyfile.UnmarshalModule(d, moduleID)
+					if err != nil {
+						return err
+					}
+					filter, ok := unm.(LogFieldFilter)
+					if !ok {
+						return d.Errf("module %s (%T) is not a logging.LogFieldFilter", moduleID, unm)
+					}
+					if fe.FieldsRaw == nil {
+						fe.FieldsRaw = make(map[string]json.RawMessage)
+					}
+					fe.FieldsRaw[field] = caddyconfig.JSONModuleObject(filter, "filter", filterName, nil)
+				}
+
+			default:
+				return d.Errf("unrecognized subdirective %s", d.Val())
+			}
+		}
+	}
 	return nil
 }
 
@@ -330,4 +392,5 @@ func (mom logObjectMarshalerWrapper) MarshalLogObject(_ zapcore.ObjectEncoder) e
 var (
 	_ zapcore.Encoder         = (*FilterEncoder)(nil)
 	_ zapcore.ObjectMarshaler = (*logObjectMarshalerWrapper)(nil)
+	_ caddyfile.Unmarshaler   = (*FilterEncoder)(nil)
 )

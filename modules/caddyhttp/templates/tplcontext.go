@@ -29,6 +29,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/alecthomas/chroma/formatters/html"
+	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
@@ -152,6 +153,9 @@ func (c templateContext) executeTemplateInBuffer(tplName string, buf *bytes.Buff
 		"splitFrontMatter": c.funcSplitFrontMatter,
 		"listFiles":        c.funcListFiles,
 		"env":              c.funcEnv,
+		"placeholder":      c.funcPlaceholder,
+		"fileExists":       c.funcFileExists,
+		"httpError":        c.funcHTTPError,
 	})
 
 	parsedTpl, err := tpl.Parse(buf.String())
@@ -162,6 +166,12 @@ func (c templateContext) executeTemplateInBuffer(tplName string, buf *bytes.Buff
 	buf.Reset() // reuse buffer for output
 
 	return parsedTpl.Execute(buf, c)
+}
+
+func (c templateContext) funcPlaceholder(name string) string {
+	repl := c.Req.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+	value, _ := repl.GetString(name)
+	return value
 }
 
 func (templateContext) funcEnv(varName string) string {
@@ -262,7 +272,10 @@ func (templateContext) funcMarkdown(input interface{}) (string, error) {
 	buf.Reset()
 	defer bufPool.Put(buf)
 
-	md.Convert([]byte(inputStr), buf)
+	err := md.Convert([]byte(inputStr), buf)
+	if err != nil {
+		return "", err
+	}
 
 	return buf.String(), nil
 }
@@ -310,6 +323,26 @@ func (c templateContext) funcListFiles(name string) ([]string, error) {
 	}
 
 	return names, nil
+}
+
+// funcFileExists returns true if filename can be opened successfully.
+func (c templateContext) funcFileExists(filename string) (bool, error) {
+	if c.Root == nil {
+		return false, fmt.Errorf("root file system not specified")
+	}
+	file, err := c.Root.Open(filename)
+	if err == nil {
+		file.Close()
+		return true, nil
+	}
+	return false, nil
+}
+
+// funcHTTPError returns a structured HTTP handler error. EXPERIMENTAL.
+// TODO: Requires https://github.com/golang/go/issues/34201 to be fixed.
+// Example usage might be: `{{if not (fileExists $includeFile)}}{{httpError 404}}{{end}}`
+func (c templateContext) funcHTTPError(statusCode int) (bool, error) {
+	return false, caddyhttp.Error(statusCode, nil)
 }
 
 // tplWrappedHeader wraps niladic functions so that they

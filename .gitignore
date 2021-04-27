@@ -7,7 +7,7 @@ Caddyfile
 *.prof
 *.test
 
-# build artifacts
+# build artifacts and helpers
 cmd/caddy/caddy
 cmd/caddy/caddy.exe
 
@@ -21,6 +21,10 @@ vendor
 dist
 caddy-build
 caddy-dist
+
+# IDE files
+.idea/
+.vscode/
 /cmd/caddy/wwwroot
 /cmd/caddy/__debug_bin
 /cmd/caddy/caddy

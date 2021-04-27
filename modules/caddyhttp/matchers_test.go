@@ -397,6 +397,9 @@ func TestPathREMatcher(t *testing.T) {
 }
 
 func TestHeaderMatcher(t *testing.T) {
+	repl := caddy.NewReplacer()
+	repl.Set("a", "foobar")
+
 	for i, tc := range []struct {
 		match  MatchHeader
 		input  http.Header // make sure these are canonical cased (std lib will do that in a real request)
@@ -480,8 +483,36 @@ func TestHeaderMatcher(t *testing.T) {
 			host:   "caddyserver.com",
 			expect: false,
 		},
+		{
+			match:  MatchHeader{"Must-Not-Exist": nil},
+			input:  http.Header{},
+			expect: true,
+		},
+		{
+			match:  MatchHeader{"Must-Not-Exist": nil},
+			input:  http.Header{"Must-Not-Exist": []string{"do not match"}},
+			expect: false,
+		},
+		{
+			match:  MatchHeader{"Foo": []string{"{a}"}},
+			input:  http.Header{"Foo": []string{"foobar"}},
+			expect: true,
+		},
+		{
+			match:  MatchHeader{"Foo": []string{"{a}"}},
+			input:  http.Header{"Foo": []string{"asdf"}},
+			expect: false,
+		},
+		{
+			match:  MatchHeader{"Foo": []string{"{a}*"}},
+			input:  http.Header{"Foo": []string{"foobar-baz"}},
+			expect: true,
+		},
 	} {
 		req := &http.Request{Header: tc.input, Host: tc.host}
+		ctx := context.WithValue(req.Context(), caddy.ReplacerCtxKey, repl)
+		req = req.WithContext(ctx)
+
 		actual := tc.match.Match(req)
 		if actual != tc.expect {
 			t.Errorf("Test %d %v: Expected %t, got %t for '%s'", i, tc.match, tc.expect, actual, tc.input)
@@ -1006,6 +1037,33 @@ func TestNotMatcher(t *testing.T) {
 			t.Errorf("Test %d %+v: Expected %t, got %t for: host=%s path=%s'", i, tc.match, tc.expect, actual, tc.host, tc.path)
 			continue
 		}
+	}
+}
+func BenchmarkLargeHostMatcher(b *testing.B) {
+	// this benchmark simulates a large host matcher (thousands of entries) where each
+	// value is an exact hostname (not a placeholder or wildcard) - compare the results
+	// of this with and without the binary search (comment out the various fast path
+	// sections in Match) to conduct experiments
+
+	const n = 10000
+	lastHost := fmt.Sprintf("%d.example.com", n-1)
+	req := &http.Request{Host: lastHost}
+	repl := caddy.NewReplacer()
+	ctx := context.WithValue(req.Context(), caddy.ReplacerCtxKey, repl)
+	req = req.WithContext(ctx)
+
+	matcher := make(MatchHost, n)
+	for i := 0; i < n; i++ {
+		matcher[i] = fmt.Sprintf("%d.example.com", i)
+	}
+	err := matcher.Provision(caddy.Context{})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		matcher.Match(req)
 	}
 }
 

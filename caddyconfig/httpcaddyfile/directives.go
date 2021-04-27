@@ -41,6 +41,7 @@ var directiveOrder = []string{
 	"root",
 
 	"header",
+	"request_body",
 
 	"redir",
 	"rewrite",
@@ -55,17 +56,21 @@ var directiveOrder = []string{
 	"encode",
 	"templates",
 
-	// special routing directives
+	// special routing & dispatching directives
 	"handle",
 	"handle_path",
 	"route",
+	"push",
 
 	// handlers that typically respond to requests
 	"respond",
+	"metrics",
 	"reverse_proxy",
 	"php_fastcgi",
 	"file_server",
 	"acme_server",
+	"abort",
+	"error",
 }
 
 // directiveIsOrdered returns true if dir is
@@ -100,20 +105,11 @@ func RegisterHandlerDirective(dir string, setupFunc UnmarshalHandlerFunc) {
 			return nil, h.ArgErr()
 		}
 
-		matcherSet, ok, err := h.MatcherToken()
+		matcherSet, err := h.ExtractMatcherSet()
 		if err != nil {
 			return nil, err
 		}
-		if ok {
-			// strip matcher token; we don't need to
-			// use the return value here because a
-			// new dispenser should have been made
-			// solely for this directive's tokens,
-			// with no other uses of same slice
-			h.Dispenser.Delete()
-		}
 
-		h.Dispenser.Reset() // pretend this lookahead never happened
 		val, err := setupFunc(h)
 		if err != nil {
 			return nil, err
@@ -198,7 +194,12 @@ func (h Helper) ExtractMatcherSet() (caddy.ModuleMap, error) {
 		return nil, err
 	}
 	if hasMatcher {
-		h.Dispenser.Delete() // strip matcher token
+		// strip matcher token; we don't need to
+		// use the return value here because a
+		// new dispenser should have been made
+		// solely for this directive's tokens,
+		// with no other uses of same slice
+		h.Dispenser.Delete()
 	}
 	h.Dispenser.Reset() // pretend this lookahead never happened
 	return matcherSet, nil
@@ -268,9 +269,26 @@ func (h Helper) NewBindAddresses(addrs []string) []ConfigValue {
 // are themselves treated as directives, from which a subroute is built
 // and returned.
 func ParseSegmentAsSubroute(h Helper) (caddyhttp.MiddlewareHandler, error) {
+	allResults, err := parseSegmentAsConfig(h)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildSubroute(allResults, h.groupCounter)
+}
+
+// parseSegmentAsConfig parses the segment such that its subdirectives
+// are themselves treated as directives, including named matcher definitions,
+// and the raw Config structs are returned.
+func parseSegmentAsConfig(h Helper) ([]ConfigValue, error) {
 	var allResults []ConfigValue
 
 	for h.Next() {
+		// don't allow non-matcher args on the first line
+		if h.NextArg() {
+			return nil, h.ArgErr()
+		}
+
 		// slice the linear list of tokens into top-level segments
 		var segments []caddyfile.Segment
 		for nesting := h.Nesting(); h.NextBlock(nesting); {
@@ -285,13 +303,17 @@ func ParseSegmentAsSubroute(h Helper) (caddyhttp.MiddlewareHandler, error) {
 		}
 
 		// find and extract any embedded matcher definitions in this scope
-		for i, seg := range segments {
+		for i := 0; i < len(segments); i++ {
+			seg := segments[i]
 			if strings.HasPrefix(seg.Directive(), matcherPrefix) {
+				// parse, then add the matcher to matcherDefs
 				err := parseMatcherDefinitions(caddyfile.NewDispenser(seg), matcherDefs)
 				if err != nil {
 					return nil, err
 				}
+				// remove the matcher segment (consumed), then step back the loop
 				segments = append(segments[:i], segments[i+1:]...)
+				i--
 			}
 		}
 
@@ -318,7 +340,7 @@ func ParseSegmentAsSubroute(h Helper) (caddyhttp.MiddlewareHandler, error) {
 		}
 	}
 
-	return buildSubroute(allResults, h.groupCounter)
+	return allResults, nil
 }
 
 // ConfigValue represents a value to be added to the final
@@ -385,6 +407,14 @@ func sortRoutes(routes []ConfigValue) {
 		if len(jPM) > 0 {
 			jPathLen = len(jPM[0])
 		}
+
+		// if both directives have no path matcher, use whichever one
+		// has any kind of matcher defined first.
+		if iPathLen == 0 && jPathLen == 0 {
+			return len(iRoute.MatcherSetsRaw) > 0 && len(jRoute.MatcherSetsRaw) == 0
+		}
+
+		// sort with the most-specific (longest) path first
 		return iPathLen > jPathLen
 	})
 }
@@ -470,9 +500,10 @@ type (
 	UnmarshalHandlerFunc func(h Helper) (caddyhttp.MiddlewareHandler, error)
 
 	// UnmarshalGlobalFunc is a function which can unmarshal Caddyfile
-	// tokens into a global option config value using a Helper type.
-	// These are passed in a call to RegisterGlobalOption.
-	UnmarshalGlobalFunc func(d *caddyfile.Dispenser) (interface{}, error)
+	// tokens from a global option. It is passed the tokens to parse and
+	// existing value from the previous instance of this global option
+	// (if any). It returns the value to associate with this global option.
+	UnmarshalGlobalFunc func(d *caddyfile.Dispenser, existingVal interface{}) (interface{}, error)
 )
 
 var registeredDirectives = make(map[string]UnmarshalFunc)

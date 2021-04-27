@@ -51,10 +51,10 @@ type CA struct {
 	// and Mozilla Firefox trust stores. Default: true.
 	InstallTrust *bool `json:"install_trust,omitempty"`
 
-	// The root certificate to use; if empty, one will be generated.
+	// The root certificate to use; if null, one will be generated.
 	Root *KeyPair `json:"root,omitempty"`
 
-	// The intermediate (signing) certificate; if empty, one will be generated.
+	// The intermediate (signing) certificate; if null, one will be generated.
 	Intermediate *KeyPair `json:"intermediate,omitempty"`
 
 	// Optionally configure a separate storage module associated with this
@@ -63,7 +63,12 @@ type CA struct {
 	// separate location from your leaf certificates.
 	StorageRaw json.RawMessage `json:"storage,omitempty" caddy:"namespace=caddy.storage inline_key=module"`
 
-	id          string
+	// The unique config-facing ID of the certificate authority.
+	// Since the ID is set in JSON config via object key, this
+	// field is exported only for purposes of config generation
+	// and module provisioning.
+	ID string `json:"-"`
+
 	storage     certmagic.Storage
 	root, inter *x509.Certificate
 	interKey    interface{} // TODO: should we just store these as crypto.Signer?
@@ -82,7 +87,7 @@ func (ca *CA) Provision(ctx caddy.Context, id string, log *zap.Logger) error {
 		return fmt.Errorf("CA ID is required (use 'local' for the default CA)")
 	}
 	ca.mu.Lock()
-	ca.id = id
+	ca.ID = id
 	ca.mu.Unlock()
 
 	if ca.StorageRaw != nil {
@@ -142,11 +147,6 @@ func (ca *CA) Provision(ctx caddy.Context, id string, log *zap.Logger) error {
 	return nil
 }
 
-// ID returns the CA's ID, as given by the user in the config.
-func (ca CA) ID() string {
-	return ca.id
-}
-
 // RootCertificate returns the CA's root certificate (public key).
 func (ca CA) RootCertificate() *x509.Certificate {
 	ca.mu.RLock()
@@ -195,14 +195,18 @@ func (ca CA) NewAuthority(authorityConfig AuthorityConfig) (*authority.Authority
 		issuerKey = ca.IntermediateKey()
 	}
 
-	auth, err := authority.NewEmbedded(
+	opts := []authority.Option{
 		authority.WithConfig(&authority.Config{
 			AuthorityConfig: authorityConfig.AuthConfig,
-			DB:              authorityConfig.DB,
 		}),
 		authority.WithX509Signer(issuerCert, issuerKey.(crypto.Signer)),
 		authority.WithX509RootCerts(rootCert),
-	)
+	}
+	// Add a database if we have one
+	if authorityConfig.DB != nil {
+		opts = append(opts, authority.WithDatabase(*authorityConfig.DB))
+	}
+	auth, err := authority.NewEmbedded(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("initializing certificate authority: %v", err)
 	}
@@ -309,14 +313,6 @@ func (ca CA) loadOrGenIntermediate(rootCert *x509.Certificate, rootKey interface
 func (ca CA) genIntermediate(rootCert *x509.Certificate, rootKey interface{}) (interCert *x509.Certificate, interKey interface{}, err error) {
 	repl := ca.newReplacer()
 
-	rootKeyPEM, err := ca.storage.Load(ca.storageKeyRootKey())
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading root key to sign new intermediate: %v", err)
-	}
-	rootKey, err = pemDecodePrivateKey(rootKeyPEM)
-	if err != nil {
-		return nil, nil, fmt.Errorf("decoding root key: %v", err)
-	}
 	interCert, interKey, err = generateIntermediate(repl.ReplaceAll(ca.IntermediateCommonName, ""), rootCert, rootKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generating CA intermediate: %v", err)
@@ -342,7 +338,7 @@ func (ca CA) genIntermediate(rootCert *x509.Certificate, rootKey interface{}) (i
 }
 
 func (ca CA) storageKeyCAPrefix() string {
-	return path.Join("pki", "authorities", certmagic.StorageKeys.Safe(ca.id))
+	return path.Join("pki", "authorities", certmagic.StorageKeys.Safe(ca.ID))
 }
 func (ca CA) storageKeyRootCert() string {
 	return path.Join(ca.storageKeyCAPrefix(), "root.crt")
@@ -390,7 +386,7 @@ type AuthorityConfig struct {
 	SignWithRoot bool
 
 	// TODO: should we just embed the underlying authority.Config struct type?
-	DB         *db.Config
+	DB         *db.AuthDB
 	AuthConfig *authority.AuthConfig
 }
 

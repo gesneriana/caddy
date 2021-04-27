@@ -22,7 +22,6 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
-	zaplogfmt "github.com/jsternberg/zap-logfmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
@@ -31,7 +30,6 @@ import (
 func init() {
 	caddy.RegisterModule(ConsoleEncoder{})
 	caddy.RegisterModule(JSONEncoder{})
-	caddy.RegisterModule(LogfmtEncoder{})
 	caddy.RegisterModule(SingleFieldEncoder{})
 }
 
@@ -110,48 +108,6 @@ func (je *JSONEncoder) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			return d.ArgErr()
 		}
 		err := je.LogEncoderConfig.UnmarshalCaddyfile(d)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// LogfmtEncoder encodes log entries as logfmt:
-// https://www.brandur.org/logfmt
-type LogfmtEncoder struct {
-	zapcore.Encoder `json:"-"`
-	LogEncoderConfig
-}
-
-// CaddyModule returns the Caddy module information.
-func (LogfmtEncoder) CaddyModule() caddy.ModuleInfo {
-	return caddy.ModuleInfo{
-		ID:  "caddy.logging.encoders.logfmt",
-		New: func() caddy.Module { return new(LogfmtEncoder) },
-	}
-}
-
-// Provision sets up the encoder.
-func (lfe *LogfmtEncoder) Provision(_ caddy.Context) error {
-	lfe.Encoder = zaplogfmt.NewEncoder(lfe.ZapcoreEncoderConfig())
-	return nil
-}
-
-// UnmarshalCaddyfile sets up the module from Caddyfile tokens. Syntax:
-//
-//     logfmt {
-//         <common encoder config subdirectives...>
-//     }
-//
-// See the godoc on the LogEncoderConfig type for the syntax of
-// subdirectives that are common to most/all encoders.
-func (lfe *LogfmtEncoder) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
-	for d.Next() {
-		if d.NextArg() {
-			return d.ArgErr()
-		}
-		err := lfe.LogEncoderConfig.UnmarshalCaddyfile(d)
 		if err != nil {
 			return err
 		}
@@ -388,11 +344,9 @@ var bufferpool = buffer.NewPool()
 var (
 	_ zapcore.Encoder = (*ConsoleEncoder)(nil)
 	_ zapcore.Encoder = (*JSONEncoder)(nil)
-	_ zapcore.Encoder = (*LogfmtEncoder)(nil)
 	_ zapcore.Encoder = (*SingleFieldEncoder)(nil)
 
 	_ caddyfile.Unmarshaler = (*ConsoleEncoder)(nil)
 	_ caddyfile.Unmarshaler = (*JSONEncoder)(nil)
-	_ caddyfile.Unmarshaler = (*LogfmtEncoder)(nil)
 	_ caddyfile.Unmarshaler = (*SingleFieldEncoder)(nil)
 )

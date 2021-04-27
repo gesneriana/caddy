@@ -16,6 +16,7 @@ package caddyfile
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -40,7 +41,13 @@ func Parse(filename string, input []byte) ([]ServerBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := parser{Dispenser: NewDispenser(tokens)}
+	p := parser{
+		Dispenser: NewDispenser(tokens),
+		importGraph: importGraph{
+			nodes: make(map[string]bool),
+			edges: make(adjacency),
+		},
+	}
 	return p.parseAll()
 }
 
@@ -60,21 +67,31 @@ func replaceEnvVars(input []byte) ([]byte, error) {
 		end += begin + len(spanOpen) // make end relative to input, not begin
 
 		// get the name; if there is no name, skip it
-		envVarName := input[begin+len(spanOpen) : end]
-		if len(envVarName) == 0 {
+		envString := input[begin+len(spanOpen) : end]
+		if len(envString) == 0 {
 			offset = end + len(spanClose)
 			continue
 		}
 
+		// split the string into a key and an optional default
+		envParts := strings.SplitN(string(envString), envVarDefaultDelimiter, 2)
+
+		// do a lookup for the env var, replace with the default if not found
+		envVarValue, found := os.LookupEnv(envParts[0])
+		if !found && len(envParts) == 2 {
+			envVarValue = envParts[1]
+		}
+
 		// get the value of the environment variable
-		envVarValue := []byte(os.ExpandEnv(os.Getenv(string(envVarName))))
+		// note that this causes one-level deep chaining
+		envVarBytes := []byte(envVarValue)
 
 		// splice in the value
 		input = append(input[:begin],
-			append(envVarValue, input[end+len(spanClose):]...)...)
+			append(envVarBytes, input[end+len(spanClose):]...)...)
 
 		// continue at the end of the replacement
-		offset = begin + len(envVarValue)
+		offset = begin + len(envVarBytes)
 	}
 	return input, nil
 }
@@ -87,15 +104,9 @@ func allTokens(filename string, input []byte) ([]Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := new(lexer)
-	err = l.load(bytes.NewReader(input))
+	tokens, err := Tokenize(input, filename)
 	if err != nil {
 		return nil, err
-	}
-	var tokens []Token
-	for l.next() {
-		l.token.File = filename
-		tokens = append(tokens, l.token)
 	}
 	return tokens, nil
 }
@@ -106,6 +117,7 @@ type parser struct {
 	eof             bool        // if we encounter a valid EOF in a hard place
 	definedSnippets map[string][]Token
 	nesting         int
+	importGraph     importGraph
 }
 
 func (p *parser) parseAll() ([]ServerBlock, error) {
@@ -160,6 +172,15 @@ func (p *parser) begin() error {
 		tokens, err := p.snippetTokens()
 		if err != nil {
 			return err
+		}
+		// Just as we need to track which file the token comes from, we need to
+		// keep track of which snippets do the tokens come from. This is helpful
+		// in tracking import cycles across files/snippets by namespacing them. Without
+		// this we end up with false-positives in cycle-detection.
+		for k, v := range tokens {
+			v.inSnippet = true
+			v.snippetName = name
+			tokens[k] = v
 		}
 		p.definedSnippets[name] = tokens
 		// empty block keys so we don't save this block as a real server.
@@ -300,7 +321,7 @@ func (p *parser) doImport() error {
 	args := p.RemainingArgs()
 
 	// add args to the replacer
-	repl := caddy.NewReplacer()
+	repl := caddy.NewEmptyReplacer()
 	for index, arg := range args {
 		repl.Set("args."+strconv.Itoa(index), arg)
 	}
@@ -310,10 +331,15 @@ func (p *parser) doImport() error {
 	tokensBefore := p.tokens[:p.cursor-1-len(args)]
 	tokensAfter := p.tokens[p.cursor+1:]
 	var importedTokens []Token
+	var nodes []string
 
 	// first check snippets. That is a simple, non-recursive replacement
 	if p.definedSnippets != nil && p.definedSnippets[importPattern] != nil {
 		importedTokens = p.definedSnippets[importPattern]
+		if len(importedTokens) > 0 {
+			// just grab the first one
+			nodes = append(nodes, fmt.Sprintf("%s:%s", importedTokens[0].File, importedTokens[0].snippetName))
+		}
 	} else {
 		// make path relative to the file of the _token_ being processed rather
 		// than current working directory (issue #867) and then use glob to get
@@ -349,7 +375,6 @@ func (p *parser) doImport() error {
 		}
 
 		// collect all the imported tokens
-
 		for _, importFile := range matches {
 			newTokens, err := p.doSingleImport(importFile)
 			if err != nil {
@@ -357,6 +382,18 @@ func (p *parser) doImport() error {
 			}
 			importedTokens = append(importedTokens, newTokens...)
 		}
+		nodes = matches
+	}
+
+	nodeName := p.File()
+	if p.Token().inSnippet {
+		nodeName += fmt.Sprintf(":%s", p.Token().snippetName)
+	}
+	p.importGraph.addNode(nodeName)
+	p.importGraph.addNodes(nodes)
+	if err := p.importGraph.addEdges(nodeName, nodes); err != nil {
+		p.importGraph.removeNodes(nodes)
+		return err
 	}
 
 	// copy the tokens so we don't overwrite p.definedSnippets
@@ -554,4 +591,7 @@ func (s Segment) Directive() string {
 
 // spanOpen and spanClose are used to bound spans that
 // contain the name of an environment variable.
-var spanOpen, spanClose = []byte{'{', '$'}, []byte{'}'}
+var (
+	spanOpen, spanClose    = []byte{'{', '$'}, []byte{'}'}
+	envVarDefaultDelimiter = ":"
+)

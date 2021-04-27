@@ -54,9 +54,12 @@
 			"automation": {
 				"policies": [
 					{
-						"issuer": {
-							"module": "internal"
-						}
+						"issuers": [
+							{
+								"module": "internal"
+							}
+						],
+						"key_type": "ed25519"
 					}
 				],
 				"on_demand": {

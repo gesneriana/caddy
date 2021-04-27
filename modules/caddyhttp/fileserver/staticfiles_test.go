@@ -17,6 +17,8 @@ package fileserver
 import (
 	"net/url"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -41,6 +43,10 @@ func TestSanitizedPathJoin(t *testing.T) {
 		{
 			inputPath: "/foo",
 			expect:    "foo",
+		},
+		{
+			inputPath: "/foo/",
+			expect:    "foo" + separator,
 		},
 		{
 			inputPath: "/foo/bar",
@@ -73,7 +79,7 @@ func TestSanitizedPathJoin(t *testing.T) {
 		{
 			inputRoot: "/a/b",
 			inputPath: "/%2e%2e%2f%2e%2e%2f",
-			expect:    filepath.Join("/", "a", "b"),
+			expect:    filepath.Join("/", "a", "b") + separator,
 		},
 		{
 			inputRoot: "C:\\www",
@@ -93,9 +99,116 @@ func TestSanitizedPathJoin(t *testing.T) {
 		}
 		actual := sanitizedPathJoin(tc.inputRoot, u.Path)
 		if actual != tc.expect {
-			t.Errorf("Test %d: [%s %s] => %s (expected %s)", i, tc.inputRoot, tc.inputPath, actual, tc.expect)
+			t.Errorf("Test %d: [%s %s] => %s (expected %s)",
+				i, tc.inputRoot, tc.inputPath, actual, tc.expect)
 		}
 	}
 }
 
-// TODO: test fileHidden
+func TestFileHidden(t *testing.T) {
+	for i, tc := range []struct {
+		inputHide []string
+		inputPath string
+		expect    bool
+	}{
+		{
+			inputHide: nil,
+			inputPath: "",
+			expect:    false,
+		},
+		{
+			inputHide: []string{".gitignore"},
+			inputPath: "/.gitignore",
+			expect:    true,
+		},
+		{
+			inputHide: []string{".git"},
+			inputPath: "/.gitignore",
+			expect:    false,
+		},
+		{
+			inputHide: []string{"/.git"},
+			inputPath: "/.gitignore",
+			expect:    false,
+		},
+		{
+			inputHide: []string{".git"},
+			inputPath: "/.git",
+			expect:    true,
+		},
+		{
+			inputHide: []string{".git"},
+			inputPath: "/.git/foo",
+			expect:    true,
+		},
+		{
+			inputHide: []string{".git"},
+			inputPath: "/foo/.git/bar",
+			expect:    true,
+		},
+		{
+			inputHide: []string{"/prefix"},
+			inputPath: "/prefix/foo",
+			expect:    true,
+		},
+		{
+			inputHide: []string{"/foo/*/bar"},
+			inputPath: "/foo/asdf/bar",
+			expect:    true,
+		},
+		{
+			inputHide: []string{"*.txt"},
+			inputPath: "/foo/bar.txt",
+			expect:    true,
+		},
+		{
+			inputHide: []string{"/foo/bar/*.txt"},
+			inputPath: "/foo/bar/baz.txt",
+			expect:    true,
+		},
+		{
+			inputHide: []string{"/foo/bar/*.txt"},
+			inputPath: "/foo/bar.txt",
+			expect:    false,
+		},
+		{
+			inputHide: []string{"/foo/bar/*.txt"},
+			inputPath: "/foo/bar/index.html",
+			expect:    false,
+		},
+		{
+			inputHide: []string{"/foo"},
+			inputPath: "/foo",
+			expect:    true,
+		},
+		{
+			inputHide: []string{"/foo"},
+			inputPath: "/foobar",
+			expect:    false,
+		},
+		{
+			inputHide: []string{"first", "second"},
+			inputPath: "/second",
+			expect:    true,
+		},
+	} {
+		if runtime.GOOS == "windows" {
+			if strings.HasPrefix(tc.inputPath, "/") {
+				tc.inputPath, _ = filepath.Abs(tc.inputPath)
+			}
+			tc.inputPath = filepath.FromSlash(tc.inputPath)
+			for i := range tc.inputHide {
+				if strings.HasPrefix(tc.inputHide[i], "/") {
+					tc.inputHide[i], _ = filepath.Abs(tc.inputHide[i])
+				}
+				tc.inputHide[i] = filepath.FromSlash(tc.inputHide[i])
+			}
+		}
+
+		actual := fileHidden(tc.inputPath, tc.inputHide)
+		if actual != tc.expect {
+			t.Errorf("Test %d: Does %v hide %s? Got %t but expected %t",
+				i, tc.inputHide, tc.inputPath, actual, tc.expect)
+		}
+	}
+}

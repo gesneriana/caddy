@@ -11,7 +11,7 @@ Please note that we consider publicly-registered domain names to be public infor
 | Version | Supported          |
 | ------- | ------------------ |
 | 2.x     | :white_check_mark: |
-| 1.x     | :white_check_mark: (deprecating soon) |
+| 1.x     | :x:                |
 | < 1.x   | :x:                |
 
 ## Reporting a Vulnerability
@@ -22,6 +22,6 @@ We'll need enough information to verify the bug and make a patch. It will speed 
 
 Please also understand that due to our nature as an open source project, we do not have a budget to award security bounties. We can only thank you.
 
-If your report is valid and a patch is released, we will not reveal your identity by default. If you wish to be credited, please give us the name to use.
+If your report is valid and a patch is released, we will not reveal your identity by default. If you wish to be credited, please give us the name to use and/or your GitHub username. If you don't provide this we can't credit you.
 
 Thanks for responsibly helping Caddy&mdash;and thousands of websites&mdash;be more secure!

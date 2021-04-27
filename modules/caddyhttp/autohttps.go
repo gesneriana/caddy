@@ -241,7 +241,7 @@ func (app *App) automaticHTTPSPhase1(ctx caddy.Context, repl *caddy.Replacer) er
 	// we now have a list of all the unique names for which we need certs;
 	// turn the set into a slice so that phase 2 can use it
 	app.allCertDomains = make([]string, 0, len(uniqueDomainsForCerts))
-	var internal, external []string
+	var internal []string
 uniqueDomainsLoop:
 	for d := range uniqueDomainsForCerts {
 		// whether or not there is already an automation policy for this
@@ -264,15 +264,13 @@ uniqueDomainsLoop:
 
 		// if no automation policy exists for the name yet, we
 		// will associate it with an implicit one
-		if certmagic.SubjectQualifiesForPublicCert(d) {
-			external = append(external, d)
-		} else {
+		if !certmagic.SubjectQualifiesForPublicCert(d) {
 			internal = append(internal, d)
 		}
 	}
 
 	// ensure there is an automation policy to handle these certs
-	err := app.createAutomationPolicies(ctx, external, internal)
+	err := app.createAutomationPolicies(ctx, internal)
 	if err != nil {
 		return err
 	}
@@ -305,31 +303,11 @@ uniqueDomainsLoop:
 			matcherSet = append(matcherSet, MatchHost(domains))
 		}
 
-		// build the address to which to redirect
 		addr, err := caddy.ParseNetworkAddress(addrStr)
 		if err != nil {
 			return err
 		}
-		redirTo := "https://{http.request.host}"
-		if addr.StartPort != uint(app.httpsPort()) {
-			redirTo += ":" + strconv.Itoa(int(addr.StartPort))
-		}
-		redirTo += "{http.request.uri}"
-
-		// build the route
-		redirRoute := Route{
-			MatcherSets: []MatcherSet{matcherSet},
-			Handlers: []MiddlewareHandler{
-				StaticResponse{
-					StatusCode: WeakString(strconv.Itoa(http.StatusPermanentRedirect)),
-					Headers: http.Header{
-						"Location":   []string{redirTo},
-						"Connection": []string{"close"},
-					},
-					Close: true,
-				},
-			},
-		}
+		redirRoute := app.makeRedirRoute(addr.StartPort, matcherSet)
 
 		// use the network/host information from the address,
 		// but change the port to the HTTP port then rebuild
@@ -357,46 +335,29 @@ uniqueDomainsLoop:
 	// it's not something that should be relied on. We can change this
 	// if we want to.
 	appendCatchAll := func(routes []Route) []Route {
-		redirTo := "https://{http.request.host}"
-		if app.httpsPort() != DefaultHTTPSPort {
-			redirTo += ":" + strconv.Itoa(app.httpsPort())
-		}
-		redirTo += "{http.request.uri}"
-		routes = append(routes, Route{
-			MatcherSets: []MatcherSet{{MatchProtocol("http")}},
-			Handlers: []MiddlewareHandler{
-				StaticResponse{
-					StatusCode: WeakString(strconv.Itoa(http.StatusPermanentRedirect)),
-					Headers: http.Header{
-						"Location":   []string{redirTo},
-						"Connection": []string{"close"},
-					},
-					Close: true,
-				},
-			},
-		})
-		return routes
+		return append(routes, app.makeRedirRoute(uint(app.httpsPort()), MatcherSet{MatchProtocol("http")}))
 	}
 
 redirServersLoop:
 	for redirServerAddr, routes := range redirServers {
 		// for each redirect listener, see if there's already a
 		// server configured to listen on that exact address; if so,
-		// simply add the redirect route to the end of its route
-		// list; otherwise, we'll create a new server for all the
-		// listener addresses that are unused and serve the
-		// remaining redirects from it
-		for srvName, srv := range app.Servers {
+		// insert the redirect route to the end of its route list
+		// after any other routes with host matchers; otherwise,
+		// we'll create a new server for all the listener addresses
+		// that are unused and serve the remaining redirects from it
+		for _, srv := range app.Servers {
 			if srv.hasListenerAddress(redirServerAddr) {
-				// user has configured a server for the same address
-				// that the redirect runs from; simply append our
-				// redirect route to the existing routes, with a
-				// caveat that their config might override ours
-				app.logger.Warn("user server is listening on same interface as automatic HTTP->HTTPS redirects; user-configured routes might override these redirects",
-					zap.String("server_name", srvName),
-					zap.String("interface", redirServerAddr),
-				)
-				srv.Routes = append(srv.Routes, appendCatchAll(routes)...)
+				// find the index of the route after the last route with a host
+				// matcher, then insert the redirects there, but before any
+				// user-defined catch-all routes
+				// see https://github.com/caddyserver/caddy/issues/3212
+				insertIndex := srv.findLastRouteWithHostMatcher()
+				srv.Routes = append(srv.Routes[:insertIndex], append(routes, srv.Routes[insertIndex:]...)...)
+
+				// append our catch-all route in case the user didn't define their own
+				srv.Routes = appendCatchAll(srv.Routes)
+
 				continue redirServersLoop
 			}
 		}
@@ -424,13 +385,46 @@ redirServersLoop:
 	return nil
 }
 
+func (app *App) makeRedirRoute(redirToPort uint, matcherSet MatcherSet) Route {
+	redirTo := "https://{http.request.host}"
+
+	// since this is an external redirect, we should only append an explicit
+	// port if we know it is not the officially standardized HTTPS port, and,
+	// notably, also not the port that Caddy thinks is the HTTPS port (the
+	// configurable HTTPSPort parameter) - we can't change the standard HTTPS
+	// port externally, so that config parameter is for internal use only;
+	// we also do not append the port if it happens to be the HTTP port as
+	// well, obviously (for example, user defines the HTTP port explicitly
+	// in the list of listen addresses for a server)
+	if redirToPort != uint(app.httpPort()) &&
+		redirToPort != uint(app.httpsPort()) &&
+		redirToPort != DefaultHTTPPort &&
+		redirToPort != DefaultHTTPSPort {
+		redirTo += ":" + strconv.Itoa(int(redirToPort))
+	}
+
+	redirTo += "{http.request.uri}"
+	return Route{
+		MatcherSets: []MatcherSet{matcherSet},
+		Handlers: []MiddlewareHandler{
+			StaticResponse{
+				StatusCode: WeakString(strconv.Itoa(http.StatusPermanentRedirect)),
+				Headers: http.Header{
+					"Location": []string{redirTo},
+				},
+				Close: true,
+			},
+		},
+	}
+}
+
 // createAutomationPolicy ensures that automated certificates for this
 // app are managed properly. This adds up to two automation policies:
 // one for the public names, and one for the internal names. If a catch-all
 // automation policy exists, it will be shallow-copied and used as the
 // base for the new ones (this is important for preserving behavior the
 // user intends to be "defaults").
-func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, internalNames []string) error {
+func (app *App) createAutomationPolicies(ctx caddy.Context, internalNames []string) error {
 	// before we begin, loop through the existing automation policies
 	// and, for any ACMEIssuers we find, make sure they're filled in
 	// with default values that might be specified in our HTTP app; also
@@ -447,14 +441,21 @@ func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, interna
 		// set up default issuer -- honestly, this is only
 		// really necessary because the HTTP app is opinionated
 		// and has settings which could be inferred as new
-		// defaults for the ACMEIssuer in the TLS app
-		if ap.Issuer == nil {
-			ap.Issuer = new(caddytls.ACMEIssuer)
-		}
-		if acmeIssuer, ok := ap.Issuer.(*caddytls.ACMEIssuer); ok {
-			err := app.fillInACMEIssuer(acmeIssuer)
+		// defaults for the ACMEIssuer in the TLS app (such as
+		// what the HTTP and HTTPS ports are)
+		if ap.Issuers == nil {
+			var err error
+			ap.Issuers, err = caddytls.DefaultIssuersProvisioned(ctx)
 			if err != nil {
 				return err
+			}
+		}
+		for _, iss := range ap.Issuers {
+			if acmeIssuer, ok := iss.(acmeCapable); ok {
+				err := app.fillInACMEIssuer(acmeIssuer.GetACMEIssuer())
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -470,9 +471,16 @@ func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, interna
 		basePolicy = new(caddytls.AutomationPolicy)
 	}
 
-	// if the basePolicy has an existing ACMEIssuer, let's
-	// use it, otherwise we'll make one
-	baseACMEIssuer, _ := basePolicy.Issuer.(*caddytls.ACMEIssuer)
+	// if the basePolicy has an existing ACMEIssuer (particularly to
+	// include any type that embeds/wraps an ACMEIssuer), let's use it
+	// (I guess we just use the first one?), otherwise we'll make one
+	var baseACMEIssuer *caddytls.ACMEIssuer
+	for _, iss := range basePolicy.Issuers {
+		if acmeWrapper, ok := iss.(acmeCapable); ok {
+			baseACMEIssuer = acmeWrapper.GetACMEIssuer()
+			break
+		}
+	}
 	if baseACMEIssuer == nil {
 		// note that this happens if basePolicy.Issuer is nil
 		// OR if it is not nil but is not an ACMEIssuer
@@ -481,7 +489,7 @@ func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, interna
 
 	// if there was a base policy to begin with, we already
 	// filled in its issuer's defaults; if there wasn't, we
-	// stil need to do that
+	// still need to do that
 	if !foundBasePolicy {
 		err := app.fillInACMEIssuer(baseACMEIssuer)
 		if err != nil {
@@ -490,8 +498,20 @@ func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, interna
 	}
 
 	// never overwrite any other issuer that might already be configured
-	if basePolicy.Issuer == nil {
-		basePolicy.Issuer = baseACMEIssuer
+	if basePolicy.Issuers == nil {
+		var err error
+		basePolicy.Issuers, err = caddytls.DefaultIssuersProvisioned(ctx)
+		if err != nil {
+			return err
+		}
+		for _, iss := range basePolicy.Issuers {
+			if acmeIssuer, ok := iss.(acmeCapable); ok {
+				err := app.fillInACMEIssuer(acmeIssuer.GetACMEIssuer())
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	if !foundBasePolicy {
@@ -499,7 +519,10 @@ func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, interna
 		// our base/catch-all policy - this will serve the
 		// public-looking names as well as any other names
 		// that don't match any other policy
-		app.tlsApp.AddAutomationPolicy(basePolicy)
+		err := app.tlsApp.AddAutomationPolicy(basePolicy)
+		if err != nil {
+			return err
+		}
 	} else {
 		// a base policy already existed; we might have
 		// changed it, so re-provision it
@@ -545,8 +568,7 @@ func (app *App) createAutomationPolicies(ctx caddy.Context, publicNames, interna
 		// of names that would normally use the production API;
 		// anyway, that gets into the weeds a bit...
 		newPolicy.Subjects = internalNames
-		newPolicy.Issuer = internalIssuer
-
+		newPolicy.Issuers = []certmagic.Issuer{internalIssuer}
 		err := app.tlsApp.AddAutomationPolicy(newPolicy)
 		if err != nil {
 			return err
@@ -630,3 +652,5 @@ func (app *App) automaticHTTPSPhase2() error {
 	app.allCertDomains = nil // no longer needed; allow GC to deallocate
 	return nil
 }
+
+type acmeCapable interface{ GetACMEIssuer() *caddytls.ACMEIssuer }

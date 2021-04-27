@@ -17,6 +17,7 @@ package httpcaddyfile
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"sort"
@@ -27,11 +28,23 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"github.com/caddyserver/caddy/v2/modules/caddypki"
 	"github.com/caddyserver/caddy/v2/modules/caddytls"
 )
 
 func init() {
 	caddyconfig.RegisterAdapter("caddyfile", caddyfile.Adapter{ServerType: ServerType{}})
+}
+
+// App represents the configuration for a non-standard
+// Caddy app module (e.g. third-party plugin) which was
+// parsed from a global options block.
+type App struct {
+	// The JSON key for the app being configured
+	Name string
+
+	// The raw app config as JSON
+	Value json.RawMessage
 }
 
 // ServerType can set up a config from an HTTP Caddyfile.
@@ -99,6 +112,7 @@ func (st ServerType) Setup(inputServerBlocks []caddyfile.ServerBlock,
 		"{tls_client_issuer}", "{http.request.tls.client.issuer}",
 		"{tls_client_serial}", "{http.request.tls.client.serial}",
 		"{tls_client_subject}", "{http.request.tls.client.subject}",
+		"{tls_client_certificate_pem}", "{http.request.tls.client.certificate_pem}",
 	)
 
 	// these are placeholders that allow a user-defined final
@@ -172,6 +186,15 @@ func (st ServerType) Setup(inputServerBlocks []caddyfile.ServerBlock,
 			if err != nil {
 				return nil, warnings, fmt.Errorf("parsing caddyfile tokens for '%s': %v", dir, err)
 			}
+
+			// As a special case, we want "handle_path" to be sorted
+			// at the same level as "handle", so we force them to use
+			// the same directive name after their parsing is complete.
+			// See https://github.com/caddyserver/caddy/issues/3675#issuecomment-678042377
+			if dir == "handle_path" {
+				dir = "handle"
+			}
+
 			for _, result := range results {
 				result.directive = dir
 				sb.pile[result.Class] = append(sb.pile[result.Class], result)
@@ -208,30 +231,38 @@ func (st ServerType) Setup(inputServerBlocks []caddyfile.ServerBlock,
 		return nil, warnings, err
 	}
 
-	// if experimental HTTP/3 is enabled, enable it on each server
-	if enableH3, ok := options["experimental_http3"].(bool); ok && enableH3 {
-		for _, srv := range httpApp.Servers {
-			srv.ExperimentalHTTP3 = true
-		}
+	// then make the PKI app
+	pkiApp, warnings, err := st.buildPKIApp(pairings, options, warnings)
+	if err != nil {
+		return nil, warnings, err
 	}
 
 	// extract any custom logs, and enforce configured levels
 	var customLogs []namedCustomLog
 	var hasDefaultLog bool
+	addCustomLog := func(ncl namedCustomLog) {
+		if ncl.name == "" {
+			return
+		}
+		if ncl.name == "default" {
+			hasDefaultLog = true
+		}
+		if _, ok := options["debug"]; ok && ncl.log.Level == "" {
+			ncl.log.Level = "DEBUG"
+		}
+		customLogs = append(customLogs, ncl)
+	}
+	// Apply global log options, when set
+	if options["log"] != nil {
+		for _, logValue := range options["log"].([]ConfigValue) {
+			addCustomLog(logValue.Value.(namedCustomLog))
+		}
+	}
+	// Apply server-specific log options
 	for _, p := range pairings {
 		for _, sb := range p.serverBlocks {
 			for _, clVal := range sb.pile["custom_log"] {
-				ncl := clVal.Value.(namedCustomLog)
-				if ncl.name == "" {
-					continue
-				}
-				if ncl.name == "default" {
-					hasDefaultLog = true
-				}
-				if _, ok := options["debug"]; ok && ncl.log.Level == "" {
-					ncl.log.Level = "DEBUG"
-				}
-				customLogs = append(customLogs, ncl)
+				addCustomLog(clVal.Value.(namedCustomLog))
 			}
 		}
 	}
@@ -249,11 +280,25 @@ func (st ServerType) Setup(inputServerBlocks []caddyfile.ServerBlock,
 
 	// annnd the top-level config, then we're done!
 	cfg := &caddy.Config{AppsRaw: make(caddy.ModuleMap)}
+
+	// loop through the configured options, and if any of
+	// them are an httpcaddyfile App, then we insert them
+	// into the config as raw Caddy apps
+	for _, opt := range options {
+		if app, ok := opt.(App); ok {
+			cfg.AppsRaw[app.Name] = app.Value
+		}
+	}
+
+	// insert the standard Caddy apps into the config
 	if len(httpApp.Servers) > 0 {
 		cfg.AppsRaw["http"] = caddyconfig.JSON(httpApp, &warnings)
 	}
 	if !reflect.DeepEqual(tlsApp, &caddytls.TLS{CertificatesRaw: make(caddy.ModuleMap)}) {
 		cfg.AppsRaw["tls"] = caddyconfig.JSON(tlsApp, &warnings)
+	}
+	if !reflect.DeepEqual(pkiApp, &caddypki.PKI{CAs: make(map[string]*caddypki.CA)}) {
+		cfg.AppsRaw["pki"] = caddyconfig.JSON(pkiApp, &warnings)
 	}
 	if storageCvtr, ok := options["storage"].(caddy.StorageConverter); ok {
 		cfg.StorageRaw = caddyconfig.JSONModuleObject(storageCvtr,
@@ -261,12 +306,8 @@ func (st ServerType) Setup(inputServerBlocks []caddyfile.ServerBlock,
 			storageCvtr.(caddy.Module).CaddyModule().ID.Name(),
 			&warnings)
 	}
-	if adminConfig, ok := options["admin"].(string); ok && adminConfig != "" {
-		if adminConfig == "off" {
-			cfg.Admin = &caddy.AdminConfig{Disabled: true}
-		} else {
-			cfg.Admin = &caddy.AdminConfig{Listen: adminConfig}
-		}
+	if adminConfig, ok := options["admin"].(*caddy.AdminConfig); ok && adminConfig != nil {
+		cfg.Admin = adminConfig
 	}
 	if len(customLogs) > 0 {
 		if cfg.Logging == nil {
@@ -281,7 +322,7 @@ func (st ServerType) Setup(inputServerBlocks []caddyfile.ServerBlock,
 			// most users seem to prefer not writing access logs
 			// to the default log when they are directed to a
 			// file or have any other special customization
-			if len(ncl.log.Include) > 0 {
+			if ncl.name != "default" && len(ncl.log.Include) > 0 {
 				defaultLog, ok := cfg.Logging.Logs["default"]
 				if !ok {
 					defaultLog = new(caddy.CustomLog)
@@ -305,23 +346,68 @@ func (ServerType) evaluateGlobalOptionsBlock(serverBlocks []serverBlock, options
 	}
 
 	for _, segment := range serverBlocks[0].block.Segments {
-		dir := segment.Directive()
+		opt := segment.Directive()
 		var val interface{}
 		var err error
 		disp := caddyfile.NewDispenser(segment)
 
-		dirFunc, ok := registeredGlobalOptions[dir]
+		optFunc, ok := registeredGlobalOptions[opt]
 		if !ok {
 			tkn := segment[0]
-			return nil, fmt.Errorf("%s:%d: unrecognized global option: %s", tkn.File, tkn.Line, dir)
+			return nil, fmt.Errorf("%s:%d: unrecognized global option: %s", tkn.File, tkn.Line, opt)
 		}
 
-		val, err = dirFunc(disp)
+		val, err = optFunc(disp, options[opt])
 		if err != nil {
-			return nil, fmt.Errorf("parsing caddyfile tokens for '%s': %v", dir, err)
+			return nil, fmt.Errorf("parsing caddyfile tokens for '%s': %v", opt, err)
 		}
 
-		options[dir] = val
+		// As a special case, fold multiple "servers" options together
+		// in an array instead of overwriting a possible existing value
+		if opt == "servers" {
+			existingOpts, ok := options[opt].([]serverOptions)
+			if !ok {
+				existingOpts = []serverOptions{}
+			}
+			serverOpts, ok := val.(serverOptions)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type from 'servers' global options: %T", val)
+			}
+			options[opt] = append(existingOpts, serverOpts)
+			continue
+		}
+		// Additionally, fold multiple "log" options together into an
+		// array so that multiple loggers can be configured.
+		if opt == "log" {
+			existingOpts, ok := options[opt].([]ConfigValue)
+			if !ok {
+				existingOpts = []ConfigValue{}
+			}
+			logOpts, ok := val.([]ConfigValue)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type from 'log' global options: %T", val)
+			}
+			options[opt] = append(existingOpts, logOpts...)
+			continue
+		}
+
+		options[opt] = val
+	}
+
+	// If we got "servers" options, we'll sort them by their listener address
+	if serverOpts, ok := options["servers"].([]serverOptions); ok {
+		sort.Slice(serverOpts, func(i, j int) bool {
+			return len(serverOpts[i].ListenerAddress) > len(serverOpts[j].ListenerAddress)
+		})
+
+		// Reject the config if there are duplicate listener address
+		seen := make(map[string]bool)
+		for _, entry := range serverOpts {
+			if _, alreadySeen := seen[entry.ListenerAddress]; alreadySeen {
+				return nil, fmt.Errorf("cannot have 'servers' global options with duplicate listener addresses: %s", entry.ListenerAddress)
+			}
+			seen[entry.ListenerAddress] = true
+		}
 	}
 
 	return serverBlocks[1:], nil
@@ -379,7 +465,7 @@ func (st *ServerType) serversFromPairings(
 			var iLongestHost, jLongestHost string
 			var iWildcardHost, jWildcardHost bool
 			for _, addr := range p.serverBlocks[i].keys {
-				if strings.Contains(addr.Host, "*.") {
+				if strings.Contains(addr.Host, "*") || addr.Host == "" {
 					iWildcardHost = true
 				}
 				if specificity(addr.Host) > specificity(iLongestHost) {
@@ -390,7 +476,7 @@ func (st *ServerType) serversFromPairings(
 				}
 			}
 			for _, addr := range p.serverBlocks[j].keys {
-				if strings.Contains(addr.Host, "*.") {
+				if strings.Contains(addr.Host, "*") || addr.Host == "" {
 					jWildcardHost = true
 				}
 				if specificity(addr.Host) > specificity(jLongestHost) {
@@ -400,9 +486,12 @@ func (st *ServerType) serversFromPairings(
 					jLongestPath = addr.Path
 				}
 			}
+			// catch-all blocks (blocks with no hostname) should always go
+			// last, even after blocks with wildcard hosts
+			if specificity(iLongestHost) == 0 {
+				return false
+			}
 			if specificity(jLongestHost) == 0 {
-				// catch-all blocks (blocks with no hostname) should always go
-				// last, even after blocks with wildcard hosts
 				return true
 			}
 			if iWildcardHost != jWildcardHost {
@@ -420,6 +509,15 @@ func (st *ServerType) serversFromPairings(
 		var hasCatchAllTLSConnPolicy, addressQualifiesForTLS bool
 		autoHTTPSWillAddConnPolicy := autoHTTPS != "off"
 
+		// if a catch-all server block (one which accepts all hostnames) exists in this pairing,
+		// we need to know that so that we can configure logs properly (see #3878)
+		var catchAllSblockExists bool
+		for _, sblock := range p.serverBlocks {
+			if len(sblock.hostsFromKeys(false)) == 0 {
+				catchAllSblockExists = true
+			}
+		}
+
 		// create a subroute for each site in the server block
 		for _, sblock := range p.serverBlocks {
 			matcherSetsEnc, err := st.compileEncodedMatcherSets(sblock)
@@ -428,6 +526,13 @@ func (st *ServerType) serversFromPairings(
 			}
 
 			hosts := sblock.hostsFromKeys(false)
+
+			// emit warnings if user put unspecified IP addresses; they probably want the bind directive
+			for _, h := range hosts {
+				if h == "0.0.0.0" || h == "::" {
+					log.Printf("[WARNING] Site block has unspecified IP address %s which only matches requests having that Host header; you probably want the 'bind' directive to configure the socket", h)
+				}
+			}
 
 			// tls: connection policies
 			if cpVals, ok := sblock.pile["tls.connection_policy"]; ok {
@@ -450,27 +555,31 @@ func (st *ServerType) serversFromPairings(
 						}
 					} else {
 						cp.DefaultSNI = defaultSNI
-						hasCatchAllTLSConnPolicy = true
 					}
 
 					// only append this policy if it actually changes something
 					if !cp.SettingsEmpty() {
 						srv.TLSConnPolicies = append(srv.TLSConnPolicies, cp)
+						hasCatchAllTLSConnPolicy = len(hosts) == 0
 					}
 				}
 			}
 
 			for _, addr := range sblock.keys {
-				// exclude any hosts that were defined explicitly with "http://"
-				// in the key from automated cert management (issue #2998)
-				if addr.Scheme == "http" && addr.Host != "" {
-					if srv.AutoHTTPS == nil {
-						srv.AutoHTTPS = new(caddyhttp.AutoHTTPSConfig)
-					}
-					if !sliceContains(srv.AutoHTTPS.Skip, addr.Host) {
-						srv.AutoHTTPS.Skip = append(srv.AutoHTTPS.Skip, addr.Host)
+				// if server only uses HTTPS port, auto-HTTPS will not apply
+				if listenersUseAnyPortOtherThan(srv.Listen, httpPort) {
+					// exclude any hosts that were defined explicitly with "http://"
+					// in the key from automated cert management (issue #2998)
+					if addr.Scheme == "http" && addr.Host != "" {
+						if srv.AutoHTTPS == nil {
+							srv.AutoHTTPS = new(caddyhttp.AutoHTTPSConfig)
+						}
+						if !sliceContains(srv.AutoHTTPS.Skip, addr.Host) {
+							srv.AutoHTTPS.Skip = append(srv.AutoHTTPS.Skip, addr.Host)
+						}
 					}
 				}
+
 				// we'll need to remember if the address qualifies for auto-HTTPS, so we
 				// can add a TLS conn policy if necessary
 				if addr.Scheme == "https" ||
@@ -533,13 +642,13 @@ func (st *ServerType) serversFromPairings(
 				} else {
 					// map each host to the user's desired logger name
 					for _, h := range sblockLogHosts {
-						// if the custom logger name is non-empty, add it to
-						// the map; otherwise, only map to an empty logger
-						// name if the server block has a catch-all host (in
-						// which case only requests with mapped hostnames will
-						// be access-logged, so it'll be necessary to add them
-						// to the map even if they use default logger)
-						if ncl.name != "" || len(hosts) == 0 {
+						// if the custom logger name is non-empty, add it to the map;
+						// otherwise, only map to an empty logger name if this or
+						// another site block on this server has a catch-all host (in
+						// which case only requests with mapped hostnames will be
+						// access-logged, so it'll be necessary to add them to the
+						// map even if they use default logger)
+						if ncl.name != "" || catchAllSblockExists {
 							if srv.Logs.LoggerNames == nil {
 								srv.Logs.LoggerNames = make(map[string]string)
 							}
@@ -594,6 +703,11 @@ func (st *ServerType) serversFromPairings(
 		srv.Routes = consolidateRoutes(srv.Routes)
 
 		servers[fmt.Sprintf("srv%d", i)] = srv
+	}
+
+	err := applyServerOptions(servers, options, warnings)
+	if err != nil {
+		return nil, err
 	}
 
 	return servers, nil
@@ -657,9 +771,15 @@ func detectConflictingSchemes(srv *caddyhttp.Server, serverBlocks []serverBlock,
 	return nil
 }
 
-// consolidateConnPolicies removes empty TLS connection policies and combines
-// equivalent ones for a cleaner overall output.
+// consolidateConnPolicies sorts any catch-all policy to the end, removes empty TLS connection
+// policies, and combines equivalent ones for a cleaner overall output.
 func consolidateConnPolicies(cps caddytls.ConnectionPolicies) (caddytls.ConnectionPolicies, error) {
+	// catch-all policies (those without any matcher) should be at the
+	// end, otherwise it nullifies any more specific policies
+	sort.SliceStable(cps, func(i, j int) bool {
+		return cps[j].MatchersRaw == nil && cps[i].MatchersRaw != nil
+	})
+
 	for i := 0; i < len(cps); i++ {
 		// compare it to the others
 		for j := 0; j < len(cps); j++ {
@@ -852,7 +972,18 @@ func buildSubroute(routes []ConfigValue, groupCounter counter) (*caddyhttp.Subro
 		// root directives would overwrite previously-matched ones; they should not cascade
 		"root": {},
 	}
-	for meDir, info := range mutuallyExclusiveDirs {
+
+	// we need to deterministically loop over each of these directives
+	// in order to keep the group numbers consistent
+	keys := make([]string, 0, len(mutuallyExclusiveDirs))
+	for k := range mutuallyExclusiveDirs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, meDir := range keys {
+		info := mutuallyExclusiveDirs[meDir]
+
 		// see how many instances of the directive there are
 		for _, r := range routes {
 			if r.directive == meDir {
@@ -1116,6 +1247,26 @@ func tryString(val interface{}, warnings *[]caddyconfig.Warning) string {
 func sliceContains(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// listenersUseAnyPortOtherThan returns true if there are any
+// listeners in addresses that use a port which is not otherPort.
+// Mostly borrowed from unexported method in caddyhttp package.
+func listenersUseAnyPortOtherThan(addresses []string, otherPort string) bool {
+	otherPortInt, err := strconv.Atoi(otherPort)
+	if err != nil {
+		return false
+	}
+	for _, lnAddr := range addresses {
+		laddrs, err := caddy.ParseNetworkAddress(lnAddr)
+		if err != nil {
+			continue
+		}
+		if uint(otherPortInt) > laddrs.EndPort || uint(otherPortInt) < laddrs.StartPort {
 			return true
 		}
 	}

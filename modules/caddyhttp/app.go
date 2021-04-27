@@ -47,7 +47,9 @@ func init() {
 //
 // Placeholder | Description
 // ------------|---------------
+// `{http.request.body}` | The request body (⚠️ inefficient; use only for debugging)
 // `{http.request.cookie.*}` | HTTP request cookie
+// `{http.request.duration}` | Time up to now spent handling the request (after decoding headers from client)
 // `{http.request.header.*}` | Specific request header field
 // `{http.request.host.labels.*}` | Request host labels (0-based from right); e.g. for foo.example.com: 0=com, 1=example, 2=foo
 // `{http.request.host}` | The host part of the request's Host header
@@ -74,6 +76,7 @@ func init() {
 // `{http.request.tls.client.fingerprint}` | The SHA256 checksum of the client certificate
 // `{http.request.tls.client.public_key}` | The public key of the client certificate.
 // `{http.request.tls.client.public_key_sha256}` | The SHA256 checksum of the client's public key.
+// `{http.request.tls.client.certificate_pem}` | The PEM-encoded value of the certificate.
 // `{http.request.tls.client.issuer}` | The issuer DN of the client certificate
 // `{http.request.tls.client.serial}` | The serial number of the client certificate
 // `{http.request.tls.client.subject}` | The subject DN of the client certificate
@@ -154,6 +157,7 @@ func (app *App) Provision(ctx caddy.Context) error {
 
 	// prepare each server
 	for srvName, srv := range app.Servers {
+		srv.name = srvName
 		srv.tlsApp = app.tlsApp
 		srv.logger = app.logger.Named("log")
 		srv.errorLogger = app.logger.Named("log.error")
@@ -173,8 +177,8 @@ func (app *App) Provision(ctx caddy.Context) error {
 		// domain fronting is desired and access is not restricted
 		// based on hostname
 		if srv.StrictSNIHost == nil && srv.hasTLSClientAuth() {
-			app.logger.Info("enabling strict SNI-Host matching because TLS client auth is configured",
-				zap.String("server_name", srvName),
+			app.logger.Warn("enabling strict SNI-Host enforcement because TLS client auth is configured",
+				zap.String("server_id", srvName),
 			)
 			trueBool := true
 			srv.StrictSNIHost = &trueBool
@@ -247,6 +251,13 @@ func (app *App) Provision(ctx caddy.Context) error {
 		if err != nil {
 			return fmt.Errorf("server %s: setting up TLS connection policies: %v", srvName, err)
 		}
+
+		// if there is no idle timeout, set a sane default; users have complained
+		// before that aggressive CDNs leave connections open until the server
+		// closes them, so if we don't close them it leads to resource exhaustion
+		if srv.IdleTimeout == 0 {
+			srv.IdleTimeout = defaultIdleTimeout
+		}
 	}
 
 	return nil
@@ -273,13 +284,18 @@ func (app *App) Validate() error {
 			}
 		}
 	}
-
 	return nil
 }
 
 // Start runs the app. It finishes automatic HTTPS if enabled,
 // including management of certificates.
 func (app *App) Start() error {
+	// get a logger compatible with http.Server
+	serverLogger, err := zap.NewStdLogAt(app.logger.Named("stdlib"), zap.DebugLevel)
+	if err != nil {
+		return fmt.Errorf("failed to set up server logger: %v", err)
+	}
+
 	for srvName, srv := range app.Servers {
 		s := &http.Server{
 			ReadTimeout:       time.Duration(srv.ReadTimeout),
@@ -288,6 +304,7 @@ func (app *App) Start() error {
 			IdleTimeout:       time.Duration(srv.IdleTimeout),
 			MaxHeaderBytes:    srv.MaxHeaderBytes,
 			Handler:           srv,
+			ErrorLog:          serverLogger,
 		}
 
 		// enable h2c if configured
@@ -343,8 +360,10 @@ func (app *App) Start() error {
 								Addr:      hostport,
 								Handler:   srv,
 								TLSConfig: tlsCfg,
+								ErrorLog:  serverLogger,
 							},
 						}
+						//nolint:errcheck
 						go h3srv.Serve(h3ln)
 						app.h3servers = append(app.h3servers, h3srv)
 						app.h3listeners = append(app.h3listeners, h3ln)
@@ -373,6 +392,7 @@ func (app *App) Start() error {
 					zap.Bool("tls", useTLS),
 				)
 
+				//nolint:errcheck
 				go s.Serve(ln)
 				app.servers = append(app.servers, s)
 			}
@@ -381,7 +401,7 @@ func (app *App) Start() error {
 
 	// finish automatic HTTPS by finally beginning
 	// certificate management
-	err := app.automaticHTTPSPhase2()
+	err = app.automaticHTTPSPhase2()
 	if err != nil {
 		return fmt.Errorf("finalizing automatic HTTPS: %v", err)
 	}
@@ -446,6 +466,12 @@ func (app *App) httpsPort() int {
 	}
 	return app.HTTPSPort
 }
+
+// defaultIdleTimeout is the default HTTP server timeout
+// for closing idle connections; useful to avoid resource
+// exhaustion behind hungry CDNs, for example (we've had
+// several complaints without this).
+const defaultIdleTimeout = caddy.Duration(5 * time.Minute)
 
 // Interface guards
 var (

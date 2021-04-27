@@ -12,26 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !windows
+// +build !linux
 
-package caddycmd
+package notify
 
-import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"syscall"
-)
-
-func gracefullyStopProcess(pid int) error {
-	fmt.Print("Graceful stop... ")
-	err := syscall.Kill(pid, syscall.SIGINT)
-	if err != nil {
-		return fmt.Errorf("kill: %v", err)
-	}
+func notifyReadiness() error {
 	return nil
 }
 
-func getProcessName() string {
-	return filepath.Base(os.Args[0])
+func notifyReloading() error {
+	return nil
+}
+
+func notifyStopping() error {
+	return nil
 }
