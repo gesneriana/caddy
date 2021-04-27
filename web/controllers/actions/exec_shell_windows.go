@@ -73,6 +73,7 @@ func ExecShell(ctx iris.Context) {
 							}
 							cmd.Dir = filepath.Dir(path)
 						} else if runtime.GOOS == "linux" {
+							fmt.Println("执行的shell: " + shell + shellConfig.StartShell)
 							cmd = exec.CommandContext(ctx, "/bin/bash", "-c", shell+shellConfig.StartShell)
 						}
 
@@ -80,11 +81,11 @@ func ExecShell(ctx iris.Context) {
 						defer file.Close()
 
 						cmd.Stdout = os.Stdout
-						cmd.Stderr = file
+						// cmd.Stderr = file
 
 						err = cmd.Start()
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("\n cmd.Start err: %v",err)
 						}
 
 						lock.Lock()
@@ -109,7 +110,7 @@ func ExecShell(ctx iris.Context) {
 						*/
 						err = cmd.Wait()
 						if err != nil {
-							fmt.Printf("wait for exec err: %v\n", err)
+							fmt.Printf("\nwait for exec err: %v", err)
 						}
 
 						lock.Lock()
@@ -124,7 +125,7 @@ func ExecShell(ctx iris.Context) {
 				cancelContext.cancel()
 				err = cancelContext.process.Kill()
 				if err != nil {
-					fmt.Printf("stop exec err: %v\n", err)
+					fmt.Printf("\nstop exec err: %v", err)
 				}
 
 				lock.Lock()
@@ -139,7 +140,7 @@ func ExecShell(ctx iris.Context) {
 			ctx.JSON(model.ResponseData{State: false, Message: "无效的指令:" + shellType, HTTPCode: 400})
 			return
 		}
-		fmt.Println("ExecShell执行结果:", result, err)
+		fmt.Printf("\nExecShell执行结果, result: %s , err: %s", result, err)
 		ctx.JSON(model.ResponseData{State: true, Message: "shell执行完成", Data: result, HTTPCode: 400})
 		return
 	}
